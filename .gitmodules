@@ -1,0 +1,3 @@
+[submodule "rpclib"]
+	path = rpclib
+	url = git@github.com:qchateau/rpclib.git
