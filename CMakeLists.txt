@@ -1,0 +1,85 @@
+cmake_minimum_required(VERSION 3.10.0)
+
+LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
+enable_testing()
+# set(CMAKE_SYSTEM_NAME Linux)
+# set(MCU MIPS-1004kc)
+
+#add_compile_options(-march=1004kc)
+project(MediaArchiverClient VERSION 0.0.1 LANGUAGES C CXX) 
+
+find_package(Threads REQUIRED)
+find_package(SQLite3 REQUIRED)
+
+set(CMAKE_CXX_STANDARD 14)
+add_subdirectory(rpclib)
+add_subdirectory(tests)
+
+add_library(MediaArchiverCommon SHARED
+    RpcFunctions.hpp
+    ServerIf.hpp
+    IMediaArchiverServer.hpp
+)
+target_include_directories(MediaArchiverCommon INTERFACE
+    $<INSTALL_INTERFACE:rpc>
+)
+target_link_libraries(MediaArchiverCommon rpc)
+
+add_executable(MediaArchiverClient
+    MediaArchiverClient.cpp
+    MediaArchiverClient.hpp
+    MediaArchiverConfig.hpp
+    MediaArchiverClientConfig.hpp    
+)
+target_link_libraries(MediaArchiverClient 
+    PRIVATE MediaArchiverCommon Threads::Threads
+)
+
+add_executable(MediaArchiverDaemon
+     MediaArchiverDaemon.cpp
+     MediaArchiverDaemon.hpp
+     MediaArchiverDaemonConfig.hpp
+
+     IMediaArchiverServer.hpp
+
+     IDatabase.hpp
+     
+     IFileCopier.hpp
+     FileCopierLinux.cpp
+     FileCopierLinux.hpp
+ )
+
+add_library(filesystemwatcher OBJECT
+     IFileSystemWatcher.hpp
+     FileSystemWatcher.hpp
+     FileSystemWatcherLinux.hpp     
+     FileSystemWatcherLinux.cpp
+)
+
+target_link_libraries(filesystemwatcher 
+PUBLIC Threads::Threads)
+
+target_include_directories(filesystemwatcher PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+
+add_library(sqlite OBJECT
+    IDatabase.hpp
+    SQLite.hpp
+    SQLite.cpp
+)
+
+target_link_libraries(sqlite 
+PUBLIC Threads::Threads rpc)
+
+target_link_libraries(sqlite 
+PUBLIC ${SQLITE3_LIBRARIES}
+)
+
+target_include_directories(sqlite  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+
+target_link_libraries(MediaArchiverDaemon 
+    PRIVATE MediaArchiverCommon Threads::Threads sqlite filesystemwatcher
+)
+# target_include_directories(MediaArchiverDaemon INTERFACE
+#     $<BUILD_INTERFACE:rpc>
+# )
+
