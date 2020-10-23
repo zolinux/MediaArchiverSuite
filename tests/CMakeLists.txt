@@ -17,8 +17,16 @@ add_executable(test_inotify
 target_include_directories(test_inotify PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 target_link_libraries(test_inotify PUBLIC filesystemwatcher)
 
+add_executable(test_daemon
+    test_daemon.cpp
+   )
+
+target_include_directories(test_daemon PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+target_link_libraries(test_daemon PUBLIC rpc MediaArchiverCommon Threads::Threads)
+
 add_test(tests
     test_sqlite
     test_inotify
+    test_daemon
 )
 

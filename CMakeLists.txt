@@ -20,8 +20,12 @@ add_library(MediaArchiverCommon SHARED
     ServerIf.hpp
     IMediaArchiverServer.hpp
 )
-target_include_directories(MediaArchiverCommon INTERFACE
-    $<INSTALL_INTERFACE:rpc>
+set_target_properties(MediaArchiverCommon PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_include_directories(MediaArchiverCommon
+    INTERFACE $<INSTALL_INTERFACE:rpc>
+    PUBLIC .
 )
 target_link_libraries(MediaArchiverCommon rpc)
 

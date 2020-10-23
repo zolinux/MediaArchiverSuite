@@ -122,6 +122,11 @@ void MediaArchiverDaemon::start()
 
     const FileToMove ftm = std::move(m_filesToMove.front());
     m_filesToMove.pop_front();
+
+    if(!ftm.result.originalFileId)
+    {
+      continue;
+    }
     lck.unlock();
     std::string error;
 
@@ -193,6 +198,10 @@ MediaArchiverDaemon::MediaArchiverDaemon(
   m_srv.bind(RpcFunctions::authenticate,
     [&](const string &token) -> void { this->authenticate(token); });
 
+  m_srv.bind(RpcFunctions::reset, [&]() -> void { this->reset(); });
+
+  m_srv.bind(RpcFunctions::abort, [&]() -> void { this->abort(); });
+
   m_srv.bind(RpcFunctions::getNextFile,
     [&](const MediaFileRequirements &filter,
       MediaEncoderSettings &settings) -> MediaEncoderSettings {
@@ -211,21 +220,48 @@ MediaArchiverDaemon::MediaArchiverDaemon(
 
   m_srv.bind(
     RpcFunctions::postFile, [&](const EncodingResultInfo &result) -> void {
-      this->postFile(result);
+      try
+      {
+        this->postFile(result);
+      }
+      catch(const std::exception &e)
+      {
+        std::cerr << e.what() << '\n';
+          rpc::this_handler().respond_error(
+            std::string("I/O error") + e.what());
+      }
     });
 
   m_srv.bind(RpcFunctions::writeChunk, [&](const DataChunk &chunk) -> bool {
-    return this->writeChunk(chunk);
+    bool ret = false;
+    try
+    {
+      ret = this->writeChunk(chunk);
+    }
+    catch(const std::exception &e)
+    {
+      std::cerr << e.what() << '\n';
+      rpc::this_handler().respond_error(
+        std::string("I/O error") + e.what());
+    }
+    return ret;
   });
 
   m_srv.bind(RpcFunctions::readChunk, [&]() -> tuple<bool, DataChunk> {
     DataChunk chunk(m_cfg.chunkSize);
-    bool ok = this->readChunk(chunk);
-    if(!ok)
+    bool haveMore = false;
+    try
     {
-      rpc::this_handler().respond_error(std::string("I/O error"));
+      haveMore = this->readChunk(chunk);
     }
-    return make_tuple(chunk.size() == m_cfg.chunkSize, std::move(chunk));
+    catch(const std::exception &e)
+    {
+      std::cerr << e.what() << '\n';
+      rpc::this_handler().respond_error(
+        std::string("I/O error:") + e.what());
+    }
+
+    return make_tuple(haveMore, std::move(chunk));
   });
 }
 
@@ -442,6 +478,31 @@ void MediaArchiverDaemon::reset()
     cli.outFile.seekp(0, ios_base::seekdir::_S_beg);
   }
 }
+void MediaArchiverDaemon::abort()
+{
+  auto &cli = checkClient();
+  if(cli.inFile.is_open())
+  {
+    cli.inFile.close();
+  }
+  else if(cli.outFile.is_open())
+  {
+    cli.outFile.close();
+  }
+  else
+    return;
+
+  lock_guard<mutex> lck(m_mtxFileMove);
+  m_db.reset(cli.originalFileId);
+  cli.inFile.clear();
+  cli.outFile.clear();
+  cli.originalFileId = 0;
+  cli.tempFileName = "";
+  cli.originalFileName = "";
+  cli.encSettings = MediaEncoderSettings();
+  cli.encResult = EncodingResultInfo();
+}
+
 bool MediaArchiverDaemon::getNextFile(ConnectedClient &cli,
   const MediaFileRequirements &filter, MediaEncoderSettings &settings)
 {
@@ -487,7 +548,7 @@ bool MediaArchiverDaemon::getNextFile(ConnectedClient &cli,
   cli.originalFileId = srcId;
   cli.encSettings.encoderType = filter.encoderType;
 
-  auto posExt = cli.originalFileName.find_last_of('.', 0);
+  auto posExt = cli.originalFileName.find_last_of('.');
   cli.encSettings.fileExtension = cli.originalFileName.substr(posExt + 1);
   settings = cli.encSettings;
   // todo: fill other members
@@ -514,7 +575,12 @@ bool MediaArchiverDaemon::readChunk(DataChunk &chunk)
     // {
     //   cli.inFile.close();
     // }
-    return !cli.inFile.fail() || cli.inFile.eof();
+    auto error = cli.inFile.fail() && !cli.inFile.eof();
+    if(error)
+    {
+      throw IOError("Cannot read from file");
+    }
+    return !cli.inFile.eof();
   }
   else
   {

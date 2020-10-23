@@ -314,4 +314,13 @@ void SQLite::checkDBOpened() const
     throw DBError(
       DBError::DBErrorCodes::ConnectionError, "Database not opened");
 }
+
+void SQLite::reset(uint32_t srcFileId)
+{
+  lock_guard<mutex> lck(m_mtx);
+  checkDBOpened();
+
+  SQL << "update queue set status=0"
+      << " where id=" << srcFileId;
+}
 }

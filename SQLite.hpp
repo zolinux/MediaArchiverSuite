@@ -1,6 +1,7 @@
 #ifndef __SQLITE_HPP__
 #define __SQLITE_HPP__
 
+#include <stdlib.h>
 #include <string>
 #include <sstream>
 #include <memory>
@@ -10,7 +11,6 @@
 #include <chrono>
 #include <iomanip>
 #include <iostream>
-#include <locale>
 
 #include "IDatabase.hpp"
 using namespace std;
@@ -31,6 +31,7 @@ public:
   virtual uint32_t addFile(const BasicFileInfo *src,
     const BasicFileInfo *dst, bool queue) override;
   virtual void addEncodedFile(const EncodedFile &file) override;
+  virtual void reset(uint32_t srcFileId) override;
   virtual ~SQLite();
 
   using Sqlite3CallbackFunctor =
@@ -56,28 +57,13 @@ private:
   const SQLite *m_sqlite;
   SQLite::Sqlite3CallbackFunctor *m_cb;
   std::stringstream m_ss;
-
-  class no_grouping : public std::numpunct_byname<char>
-  {
-    std::string do_grouping() const { return ""; }
-
-  public:
-    no_grouping()
-      : numpunct_byname("")
-    {
-    }
-  };
-  no_grouping *m_loc;
-  std::locale m_locale;
+  char m_buf[32];
 
 public:
   ExecSQL(const SQLite *sqlite)
     : m_sqlite(sqlite)
     , m_cb(nullptr)
-    , m_loc(new no_grouping())
-    , m_locale(std::locale(std::locale(""), m_loc))
   {
-    m_ss.imbue(m_locale);
   }
 
   static struct NOW
@@ -101,17 +87,20 @@ public:
   }
   ExecSQL &operator<<(int i)
   {
-    m_ss << i;
+    snprintf(m_buf, sizeof(m_buf), "%i", i);
+    m_ss << m_buf;
     return *this;
   }
   ExecSQL &operator<<(uint32_t i)
   {
-    m_ss << i;
+    snprintf(m_buf, sizeof(m_buf), "%u", i);
+    m_ss << m_buf;
     return *this;
   }
   ExecSQL &operator<<(size_t i)
   {
-    m_ss << i;
+    snprintf(m_buf, sizeof(m_buf), "%lu", i);
+    m_ss << m_buf;
     return *this;
   }
   ExecSQL &operator<<(std::_Put_time<char> i)
@@ -130,10 +119,6 @@ public:
   }
   ~ExecSQL()
   {
-    m_ss.imbue(std::locale::classic());
-    delete m_loc;
-    m_loc = nullptr;
-
     m_sqlite->execSql(m_ss.str().c_str(),
       m_cb ? &SQLite::sqliteCallbackInvoker : nullptr, m_cb);
   }

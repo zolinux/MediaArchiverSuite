@@ -8,6 +8,7 @@
 #include "MediaArchiverClientConfig.hpp"
 
 #include "rpc/client.h"
+#include "rpc/rpc_error.h"
 #include "RpcFunctions.hpp"
 
 namespace MediaArchiver
@@ -37,6 +38,7 @@ public:
   }
 
   virtual void reset() override { m_rpc->call(RpcFunctions::reset); }
+  virtual void abort() override { m_rpc->call(RpcFunctions::abort); }
   virtual bool getNextFile(const MediaFileRequirements &filter,
     MediaEncoderSettings &settings) override
   {
@@ -55,14 +57,47 @@ public:
     file.write(content.data(), len);
     return std::get<0>(data);
   }
+  virtual bool readChunk(DataChunk &buffer)
+  {
+    try
+    {
+      auto response = m_rpc->call(RpcFunctions::readChunk);
+      auto data = response.as<std::tuple<bool, DataChunk>>();
+
+      const auto &content = std::get<1>(data);
+      auto len = content.size();
+
+      buffer.resize(len);
+      buffer = std::move(content);
+      return std::get<0>(data);
+    }
+    catch(rpc::rpc_error &e)
+    {
+      throw std::runtime_error(std::string("read chunk: ") + e.what());
+    }
+    catch(...)
+    {
+      throw std::runtime_error(std::string("read chunk ERROR"));
+    }
+    return false;
+  }
   virtual void postFile(const EncodingResultInfo &result) override
   {
     m_rpc->call(RpcFunctions::postFile, result);
   }
-  virtual bool writeChunk(const std::vector<char> &data) override
+  virtual bool writeChunk(const DataChunk &data) override
   {
-    auto res = m_rpc->call(RpcFunctions::writeChunk, data).as<bool>();
-    return res;
+    try
+    {
+      auto response = m_rpc->call(RpcFunctions::writeChunk, data);
+      auto res = response.as<bool>();
+      return res;
+    }
+    catch(rpc::rpc_error &e)
+    {
+      throw std::runtime_error(std::string("write chunk: ") + e.what());
+    }
+    return false;
   }
   virtual uint32_t getVersion() const override
   {
@@ -71,6 +106,5 @@ public:
 
   virtual ~ServerIf() { m_rpc.reset(); }
 };
-
 }
 #endif

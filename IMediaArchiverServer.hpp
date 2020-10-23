@@ -88,6 +88,7 @@ public:
 
   virtual void authenticate(const std::string &token) = 0;
   virtual void reset() = 0;
+  virtual void abort() = 0;
   virtual bool getNextFile(const MediaFileRequirements &filter,
     MediaEncoderSettings &settings) = 0;
   virtual bool readChunk(std::ostream &file) = 0;

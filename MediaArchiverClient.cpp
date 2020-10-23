@@ -579,6 +579,8 @@ int MediaArchiverClient::poll()
 
   if(m_shutdown)
   {
+    checkCreateRpc();
+    m_rpc->abort();
     cleanUp();
     return 1;
   }

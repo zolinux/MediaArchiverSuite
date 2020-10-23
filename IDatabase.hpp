@@ -77,6 +77,13 @@ public:
    */
   virtual void addEncodedFile(const EncodedFile &file) = 0;
 
+  /**
+   * @brief resets the queue for source file to not started
+   *
+   * @param srcFileId source file ID
+   */
+  virtual void reset(uint32_t srcFileId) = 0;
+
   virtual ~IDatabase(){};
 };
 

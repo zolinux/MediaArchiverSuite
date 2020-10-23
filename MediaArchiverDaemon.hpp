@@ -78,6 +78,7 @@ protected:
   bool isIdle();
   void authenticate(const std::string &token);
   void reset();
+  void abort();
   bool getNextFile(ConnectedClient &cli,
     const MediaFileRequirements &filter, MediaEncoderSettings &settings);
   bool readChunk(DataChunk &chunk);

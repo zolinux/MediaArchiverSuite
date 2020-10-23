@@ -5,16 +5,16 @@
 
 namespace MediaArchiver
 {
-class RpcFunctions
+namespace RpcFunctions
 {
-public:
-  static constexpr const char *authenticate = "authenticate";
-  static constexpr const char *getVersion = "getVersion";
-  static constexpr const char *reset = "reset";
-  static constexpr const char *getNextFile = "getNextFile";
-  static constexpr const char *readChunk = "readChunk";
-  static constexpr const char *postFile = "postFile";
-  static constexpr const char *writeChunk = "writeChunk";
+const char authenticate[] = "authenticate";
+const char getVersion[] = "getVersion";
+const char reset[] = "reset";
+const char abort[] = "abort";
+const char getNextFile[] = "getNextFile";
+const char readChunk[] = "readChunk";
+const char postFile[] = "postFile";
+const char writeChunk[] = "writeChunk";
 };
 }
 #endif
