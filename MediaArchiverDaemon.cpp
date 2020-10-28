@@ -227,8 +227,8 @@ MediaArchiverDaemon::MediaArchiverDaemon(
       catch(const std::exception &e)
       {
         std::cerr << e.what() << '\n';
-          rpc::this_handler().respond_error(
-            std::string("I/O error") + e.what());
+        rpc::this_handler().respond_error(
+          std::string("I/O error") + e.what());
       }
     });
 
@@ -351,6 +351,9 @@ void MediaArchiverDaemon::onFileSystemChange(
   IFileSystemChangeListener::EventType e, const std::string &src,
   const std::string &dst)
 {
+  if(e == IFileSystemChangeListener::EventType::FileDeleted)
+    return;
+
   size_t size[2];
 
   if(!dst.empty())
@@ -370,10 +373,10 @@ void MediaArchiverDaemon::onFileSystemChange(
     // original file BasicFileInfo f{.fileName = dst, .fileSize = size[1]};
     // m_db.addFile(nullptr, &f, false);
     dstIsArchive = true;
-
     aName = dst;
-    aName.erase(dst.find_last_of(m_cfg.resultFileSuffix),
-      m_cfg.resultFileSuffix.length());
+    const size_t pos = aName.rfind(m_cfg.resultFileSuffix);
+    const size_t len = m_cfg.resultFileSuffix.length();
+    aName.erase(pos, len);
   }
 
   if(isInterestingFile(dst))
@@ -428,33 +431,19 @@ void MediaArchiverDaemon::authenticate(const std::string &token)
   auto id = rpc::this_session().id();
   ConnectedClient cl;
   std::lock_guard<std::mutex> lck(m_mtxFileMove);
-  bool found = false;
 
   for(auto &conn: m_connections)
   {
     if(token == conn.second.token)
     {
       cl = std::move(conn.second);
-      found = true;
       m_connections.erase(conn.first);
       continue;
-    }
-
-    if(m_connections.count(id) > 0)
-    {
-      if(token != conn.second.token)
-      {
-        m_connections.erase(conn.first);
-        continue;
-      }
     }
   }
 
   cl.lastActivify = std::chrono::steady_clock::now();
-  if(!found)
-  {
-    cl.token = token;
-  }
+  cl.token = token;
   m_connections[id] = std::move(cl);
 }
 uint32_t MediaArchiverDaemon::getVersion() const
@@ -580,7 +569,14 @@ bool MediaArchiverDaemon::readChunk(DataChunk &chunk)
     {
       throw IOError("Cannot read from file");
     }
-    return !cli.inFile.eof();
+    else
+    {
+      if(chunk.size() != len)
+      {
+        chunk.resize(len);
+      }
+    }
+    return len;
   }
   else
   {
@@ -593,6 +589,11 @@ void MediaArchiverDaemon::postFile(const EncodingResultInfo &result)
   auto &cli = checkClient();
   if(cli.inFile.is_open())
   {
+    if(cli.inFile.tellg() != cli.encSettings.fileLength)
+    {
+      throw runtime_error("File not read till the end");
+    }
+
     cli.inFile.close();
   }
 
@@ -607,6 +608,7 @@ void MediaArchiverDaemon::postFile(const EncodingResultInfo &result)
   {
     // prepare for receiving data
     std::stringstream ss;
+    ss.imbue(std::locale::classic());
     if(m_cfg.tempFolder == ".")
     {
       ss << cli.originalFileName << "." << cli.originalFileId;
@@ -615,13 +617,18 @@ void MediaArchiverDaemon::postFile(const EncodingResultInfo &result)
     {
       ss << "./" << cli.originalFileId;
     }
+    else
     {
       ss << m_cfg.tempFolder << '/' << cli.originalFileId;
     }
 
     cli.tempFileName = ss.str();
-    cli.outFile.open(cli.tempFileName,
-      std::ios_base::openmode::_S_bin | std::ios_base::openmode::_S_out);
+    cli.outFile.open(cli.tempFileName, std::ios::binary | std::ios::out);
+    if(!cli.outFile.is_open())
+    {
+      throw std::runtime_error(
+        string("Could not open output temp file: ") + cli.tempFileName);
+    }
   }
   else
   {
@@ -634,6 +641,12 @@ void MediaArchiverDaemon::postFile(const EncodingResultInfo &result)
 bool MediaArchiverDaemon::writeChunk(const std::vector<char> &data)
 {
   auto &cli = checkClient();
+  if(!cli.originalFileId || !cli.outFile.is_open() ||
+    !cli.encResult.fileLength)
+  {
+    throw std::runtime_error("invalid state");
+  }
+
   cli.outFile.write(data.data(), data.size());
   if(cli.outFile.tellp() < cli.encResult.fileLength)
   {

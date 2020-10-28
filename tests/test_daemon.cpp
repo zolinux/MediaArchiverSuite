@@ -108,6 +108,8 @@ TEST_CASE("rpc service (pass)", "[rpc]")
   do
   {
     REQUIRE_NOTHROW(success = rpc->readChunk(writeFile));
+    REQUIRE(writeFile.tellp() >= 0);
+    REQUIRE(mes.fileLength >= writeFile.tellp());
   } while(success);
 
   REQUIRE(writeFile.tellp() == mes.fileLength);

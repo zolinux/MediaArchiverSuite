@@ -265,17 +265,17 @@ uint32_t SQLite::addFile(
            << " file: " << dst->fileName << endl;
     }
 
-    // if archive not present, add it w/ srcId, if present just add to queue
-    // if needed
-    if(!found)
-    {
-      // add to archives an archives
-      SQL << "INSERT INTO archives (id,path) VALUES (" << srcId << ",'"
-          << dst->fileName << "');";
-    }
-
     if(srcId)
     {
+      // if archive not present, add it w/ srcId, if present just add to
+      // queue if needed
+      if(!found)
+      {
+        // add to archives an archives
+        SQL << "INSERT INTO archives (id,path) VALUES (" << srcId << ",'"
+            << dst->fileName << "');";
+      }
+
       if(!inQueue)
       {
         SQL << "INSERT INTO queue (id,status,count,start) VALUES(" << srcId
