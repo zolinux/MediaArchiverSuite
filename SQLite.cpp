@@ -84,7 +84,7 @@ void SQLite::setupTables()
   SQL
     << "BEGIN TRANSACTION;"
        "CREATE TABLE sourcefiles (id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT, size INTEGER);"
-       "CREATE TABLE archives (id INTEGER, path TEXT);"
+       "CREATE TABLE archives (id INTEGER PRIMARY KEY, path TEXT);"
        "CREATE TABLE queue (id INTEGER, status INTEGER, count INTEGER, start timestamp, comment TEXT);"
        "COMMIT;";
 }
@@ -95,8 +95,9 @@ void SQLite::execSql(const char *sql, sqlite3_callback cb, void *data) const
 
   if(rc != SQLITE_OK && string("query aborted") != zErrMsg)
   {
-    auto s = string("SQL Error: ") + zErrMsg;
+    string errorStr(zErrMsg);
     sqlite3_free(zErrMsg);
+    auto s = string("SQL Error: ") + errorStr;
     throw DBError(DBError::DBErrorCodes::SqlError, s);
   }
 }
@@ -273,7 +274,7 @@ uint32_t SQLite::addFile(
       {
         // add to archives an archives
         SQL << "INSERT INTO archives (id,path) VALUES (" << srcId << ",'"
-            << dst->fileName << "');";
+            << dst->fileName << "') on conflict do nothing;";
       }
 
       if(!inQueue)
@@ -305,7 +306,7 @@ void SQLite::addEncodedFile(const EncodedFile &file)
       << ",start=" << ExecSQL::now << ",comment=" << comment
       << " where id=" << file.originalFileId << ";"
       << "INSERT INTO archives (id,path) VALUES (" << file.originalFileId
-      << ",'" << file.fileName << "')";
+      << ",'" << file.fileName << "') on conflict do nothing";
 }
 
 void SQLite::checkDBOpened() const
