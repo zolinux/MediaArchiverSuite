@@ -46,7 +46,7 @@ void generateToken()
   gToken = std::string(buf);
 }
 
-TEST_CASE("rpc service (pass)", "[rpc]")
+std::unique_ptr<ServerIf> connect()
 {
   auto rpc = std::make_unique<ServerIf>(gCfg);
   REQUIRE(rpc);
@@ -57,17 +57,29 @@ TEST_CASE("rpc service (pass)", "[rpc]")
 
   generateToken();
   REQUIRE_NOTHROW(rpc->authenticate(gToken));
+  return rpc;
+}
 
+void getNextFile(std::unique_ptr<ServerIf> &rpc, MediaEncoderSettings &mes)
+{
   const MediaFileRequirements mfrq{.encoderType = "ffmpeg",
     .maxFileSize = 100u * 1024 * 1024};
 
-  MediaEncoderSettings mes;
   bool success = false;
   REQUIRE_NOTHROW(success = rpc->getNextFile(mfrq, mes));
   REQUIRE(success);
   REQUIRE(mes.fileLength > 0);
   REQUIRE(!mes.fileExtension.empty());
   REQUIRE(!mes.commandLineParameters.empty());
+}
+
+TEST_CASE("rpc service (pass)", "[rpc]")
+{
+  MediaEncoderSettings mes;
+  bool success = false;
+
+  auto rpc = connect();
+  getNextFile(rpc, mes);
 
   DataChunk file[2];
   int idx = 0;
@@ -97,11 +109,7 @@ TEST_CASE("rpc service (pass)", "[rpc]")
   REQUIRE_THROWS(rpc->writeChunk(file[0]));
   REQUIRE_NOTHROW(rpc->reset());
 
-  REQUIRE_NOTHROW(success = rpc->getNextFile(mfrq, mes));
-  REQUIRE(success);
-  REQUIRE(mes.fileLength > 0);
-  REQUIRE(!mes.fileExtension.empty());
-  REQUIRE(!mes.commandLineParameters.empty());
+  getNextFile(rpc, mes);
 
   const string fName("file.tmp");
   ofstream writeFile(fName);
@@ -135,4 +143,31 @@ TEST_CASE("rpc service (pass)", "[rpc]")
   readFile.close();
   std::remove(fName.c_str());
   REQUIRE_THROWS(rpc->writeChunk(file[0]));
+}
+
+TEST_CASE("file transfer antitest (pass)", "[encfail]")
+{
+  MediaEncoderSettings mes;
+  bool success = false;
+
+  auto rpc = connect();
+  getNextFile(rpc, mes);
+
+  DataChunk file;
+  size_t length = 0;
+
+  do
+  {
+    REQUIRE_NOTHROW(success = rpc->readChunk(file));
+    length += file.size();
+  } while(success);
+
+  REQUIRE(length == mes.fileLength);
+
+  EncodingResultInfo eri(EncodingResultInfo::EncodingResult::PermanentError,
+    0, "Very bad fatal error");
+  REQUIRE_NOTHROW(rpc->postFile(eri));
+
+  getNextFile(rpc, mes);
+  REQUIRE_NOTHROW(rpc->abort());
 }

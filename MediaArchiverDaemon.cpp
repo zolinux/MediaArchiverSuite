@@ -130,16 +130,24 @@ void MediaArchiverDaemon::start()
     lck.unlock();
     std::string error;
 
-    try
+    if(ftm.result.result != EncodingResultInfo::EncodingResult::OK ||
+      ftm.result.fileLength == 0)
     {
-      FileCopier().moveFile(
-        ftm.tmp.c_str(), ftm.result.fileName.c_str(), &ftm.atime);
       m_db.addEncodedFile(ftm.result);
     }
-    catch(const std::exception &e)
+    else
     {
-      std::cerr << e.what() << '\n';
-      error = e.what();
+      try
+      {
+        FileCopier().moveFile(
+          ftm.tmp.c_str(), ftm.result.fileName.c_str(), &ftm.atime);
+        m_db.addEncodedFile(ftm.result);
+      }
+      catch(const std::exception &e)
+      {
+        std::cerr << e.what() << '\n';
+        error = e.what();
+      }
     }
 
     if(error.empty()) {}

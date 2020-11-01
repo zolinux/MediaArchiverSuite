@@ -304,9 +304,13 @@ void SQLite::addEncodedFile(const EncodedFile &file)
 
   SQL << "update queue set status=" << file.result
       << ",start=" << ExecSQL::now << ",comment=" << comment
-      << " where id=" << file.originalFileId << ";"
-      << "INSERT INTO archives (id,path) VALUES (" << file.originalFileId
-      << ",'" << file.fileName << "') on conflict do nothing";
+      << " where id=" << file.originalFileId;
+
+  if(file.fileLength > 0)
+  {
+    SQL << "INSERT INTO archives (id,path) VALUES (" << file.originalFileId
+        << ",'" << file.fileName << "') on conflict do nothing";
+  }
 }
 
 void SQLite::checkDBOpened() const
