@@ -11,11 +11,15 @@ project(MediaArchiverClient VERSION 0.0.1 LANGUAGES C CXX)
 find_package(Threads REQUIRED)
 find_package(SQLite3 REQUIRED)
 
+if(WIN32)
+    add_compile_definitions( _WIN32_WINNT=0x0601)
+endif()
+
 set(CMAKE_CXX_STANDARD 14)
 add_subdirectory(rpclib)
 add_subdirectory(tests)
 
-add_library(MediaArchiverCommon SHARED
+add_library(MediaArchiverCommon OBJECT
     RpcFunctions.hpp
     ServerIf.hpp
     IMediaArchiverServer.hpp
@@ -27,7 +31,10 @@ target_include_directories(MediaArchiverCommon
     INTERFACE $<INSTALL_INTERFACE:rpc>
     PUBLIC .
 )
-target_link_libraries(MediaArchiverCommon rpc)
+target_link_libraries(MediaArchiverCommon 
+    PUBLIC rpc
+    PUBLIC $<$<BOOL:MINGW>:ws2_32>
+)
 
 add_executable(MediaArchiverClient
     MediaArchiverClient.cpp
