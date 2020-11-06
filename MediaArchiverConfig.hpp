@@ -88,9 +88,8 @@ public:
         readData = true;
         if(!parse(key, value, m_config))
         {
-          std::stringstream ss;
-          ss << "could not parse key \"" << key << "\"";
-          throw std::invalid_argument(ss.str());
+          std::cerr << "Error: ignored unrecognized configuration: " << key
+                    << " with value: " << value << std::endl;
         }
       }
     }

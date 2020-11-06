@@ -71,6 +71,8 @@ MediaArchiverClient::MediaArchiverClient(const ClientConfig &cfg)
   , m_filter{"ffmpeg", 4u * 1024 * 1024 * 1024}
   , m_encodeProcess{nullptr, pclose}
   , m_authenticated(false)
+  , m_stopRequested(false)
+  , m_shutdown(false)
 {
   std::random_device rd;
   std::mt19937 mt(rd());
@@ -98,7 +100,7 @@ template<>
 bool MediaArchiverConfig<ClientConfig>::parse(
   const std::string &key, const std::string &value, ClientConfig &config)
 {
-  std::locale::global(std::locale("en_US.utf8"));
+  //  std::locale::global(std::locale(""));
   auto k = key;
   auto &f = std::use_facet<std::ctype<char>>(std::locale());
   f.tolower(&k[0], &k[0] + k.size());
@@ -175,6 +177,9 @@ void MediaArchiverClient::doAuth()
     std::stringstream ss;
     ss << m_token;
     m_rpc->authenticate(ss.str());
+    m_authenticated = true;
+    m_mainState = m_prevMainState;
+    m_prevMainState = m_mainState;
   }
   catch(const rpc::timeout &e)
   {
@@ -188,9 +193,13 @@ void MediaArchiverClient::doAuth()
     std::cerr << "ERROR: " << e.what() << '\n';
     return;
   }
-  m_authenticated = true;
-  m_mainState = m_prevMainState;
-  m_prevMainState = m_mainState;
+  catch(const rpc::system_error &e)
+  {
+    m_prevMainState = MainStates::Idle;
+    m_mainState = MainStates::WaitForReconnect;
+    m_timeToWait = m_cfg.serverConnectionTimeout;
+    m_startTime = std::chrono::steady_clock::now();
+  }
 }
 
 void MediaArchiverClient::doIdle()
@@ -236,6 +245,14 @@ void MediaArchiverClient::doIdle()
         m_startTime = std::chrono::steady_clock::now();
       }
     }
+  }
+  catch(const rpc::system_error &e)
+  {
+    error = true;
+    exc = e;
+    next = MainStates::WaitForReconnect;
+    m_timeToWait = m_cfg.serverConnectionTimeout;
+    m_startTime = std::chrono::steady_clock::now();
   }
   catch(const rpc::rpc_error &e)
   {
@@ -579,8 +596,20 @@ int MediaArchiverClient::poll()
 
   if(m_shutdown)
   {
-    checkCreateRpc();
-    m_rpc->abort();
+    if(m_rpc)
+    {
+      try
+      {
+        m_rpc->abort();
+      }
+      catch(const std::exception &e)
+      {
+        std::cerr << "Error during shutting down: " << e.what()
+                  << std::endl;
+      }
+
+      m_rpc.reset();
+    }
     cleanUp();
     return 1;
   }
