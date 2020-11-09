@@ -20,7 +20,7 @@ namespace MediaArchiver
 {
 class MediaArchiverClient
 {
-private:
+protected:
   static constexpr const char *InTmpFileName = "infile00";
   static constexpr const char *OutTmpFileName = "outfile00";
   std::unique_ptr<FILE, decltype(&pclose)> m_encodeProcess;

@@ -24,9 +24,17 @@ add_executable(test_daemon
 target_include_directories(test_daemon PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 target_link_libraries(test_daemon PUBLIC rpc MediaArchiverCommon Threads::Threads)
 
+add_executable(test_client
+    test_client.cpp
+   )
+
+target_include_directories(test_client PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+target_link_libraries(test_client PUBLIC rpc MediaArchiverCommon MediaArchiverClient Threads::Threads)
+
 add_test(tests
     test_sqlite
     test_inotify
     test_daemon
+    test_client
 )
 

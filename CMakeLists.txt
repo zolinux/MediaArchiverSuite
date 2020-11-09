@@ -36,7 +36,7 @@ target_link_libraries(MediaArchiverCommon
     PUBLIC $<$<BOOL:MINGW>:ws2_32>
 )
 
-add_executable(MediaArchiverClient
+add_library(MediaArchiverClient OBJECT
     MediaArchiverClient.cpp
     MediaArchiverClient.hpp
     MediaArchiverConfig.hpp
@@ -44,6 +44,14 @@ add_executable(MediaArchiverClient
 )
 target_link_libraries(MediaArchiverClient 
     PRIVATE MediaArchiverCommon Threads::Threads
+)
+
+add_executable(MediaArchiverClientMain
+    MediaArchiverClientMain.cpp
+)
+
+target_link_libraries(MediaArchiverClientMain
+    PRIVATE MediaArchiverCommon MediaArchiverClient Threads::Threads
 )
 
 add_executable(MediaArchiverDaemon
@@ -68,7 +76,8 @@ add_library(filesystemwatcher OBJECT
 )
 
 target_link_libraries(filesystemwatcher 
-PUBLIC Threads::Threads)
+    PUBLIC Threads::Threads
+)
 
 target_include_directories(filesystemwatcher PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 

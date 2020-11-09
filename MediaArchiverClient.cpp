@@ -20,52 +20,8 @@
 #include "MediaArchiverConfig.hpp"
 #include "ServerIf.hpp"
 
-static std::unique_ptr<MediaArchiver::MediaArchiverClient> gima;
+using namespace MediaArchiver;
 
-static MediaArchiver::ClientConfig gCfg{
-  .serverConnectionTimeout = 5000,
-  .verbosity = 0,
-  .checkForNewFileInterval = 60000,
-  .reconnectDelay = 3333,
-  .serverPort = 2020,
-  .chunkSize = 256 * 1024,
-  .serverName = "localhost",
-  .pathToEncoder = "",
-  .pathToProbe = "",
-#ifdef WIN32
-  .tempFolder = ".",
-#else
-  .tempFolder = "/tmp",
-#endif
-};
-
-// Define the function to be called when ctrl-c (SIGINT) is sent to process
-void signal_callback_handler(int signum)
-{
-  if(!gima)
-  {
-    exit(signum);
-  }
-
-  bool forced = signum != SIGINT || gima->isStopRequested();
-  if(!forced)
-  {
-    gima->stop(false);
-    std::cerr
-      << "Termination requested after finishing the current encoding step..."
-      << std::endl;
-  }
-  else
-  {
-    std::cerr << "Aborting process..." << std::endl;
-    gima->stop(true);
-    // Terminate program
-    // exit(signum);
-  }
-}
-
-namespace MediaArchiver
-{
 MediaArchiverClient::MediaArchiverClient(const ClientConfig &cfg)
   : m_cfg(cfg)
   , m_filter{"ffmpeg", 4u * 1024 * 1024 * 1024}
@@ -378,7 +334,7 @@ int MediaArchiverClient::getMovieLength(const std::string &path)
 {
   std::stringstream cmd;
   std::string stdOut;
-  cmd << m_cfg.pathToProbe << "-i \"" << path << "\" 2>&1";
+  cmd << m_cfg.pathToProbe << " -i \"" << path << "\" 2>&1";
 
   launch(cmd.str());
   auto retcode = waitForFinish(stdOut);
@@ -389,17 +345,22 @@ int MediaArchiverClient::getMovieLength(const std::string &path)
   std::regex re("(?:Duration:\\s*)(\\d*):(\\d*):(\\d*).(\\d*)",
     std::regex_constants::ECMAScript | std::regex_constants::icase);
 
-  if(retcode == 0 && std::regex_match(stdOut, m, re))
+  if(retcode == 0 && std::regex_search(stdOut, m, re))
   {
-    if(m.size() != 4)
+    const int mult[] = {3600, 60, 1, 0};
+    const int timeCount = sizeof(mult) / sizeof(mult[0]);
+
+    if(m.size() != timeCount + 1)
     {
       return -1;
     }
 
-    int mult[4] = {3600, 60, 1, 0};
     int dur = 0;
-    for(int i = 0; i < 4; i++)
-    { dur += mult[i] * atoi(m[i].str().c_str()); }
+    for(int i = 0; i < timeCount; i++)
+    {
+      auto tim = atoi(m[i + 1].str().c_str());
+      dur += mult[i] * tim;
+    }
     return dur;
   }
   else
@@ -453,7 +414,7 @@ void MediaArchiverClient::doConvert()
         }
 
         m_dstFile.open(m_cfg.tempFolder + "/" + OutTmpFileName,
-          std::ios_base::in | std::ios_base::binary);
+          std::ios::in | std::ios::binary);
 
         if(!m_dstFile.is_open())
         {
@@ -462,7 +423,7 @@ void MediaArchiverClient::doConvert()
           break;
         }
 
-        m_dstFile.seekg(0, std::ios_base::end);
+        m_dstFile.seekg(0, std::ios::end);
         m_encResult.fileLength = m_dstFile.tellg();
         // leave file open for transmission stage
 
@@ -615,36 +576,4 @@ int MediaArchiverClient::poll()
   }
 
   return 0;
-}
-
-}
-
-int main(int argc, char **argv)
-{
-  // load configuration
-
-  {
-    auto mac =
-      MediaArchiver::MediaArchiverConfig<MediaArchiver::ClientConfig>(gCfg);
-    auto b = mac.read("MediaArchiver.cfg");
-  }
-
-  // Register signal and signal handler
-  signal(SIGINT, signal_callback_handler);
-  signal(SIGABRT, signal_callback_handler);
-
-#ifndef WIN32
-  signal(SIGKILL, signal_callback_handler);
-#endif
-
-  gima.reset(new MediaArchiver::MediaArchiverClient(gCfg));
-  if(!gima)
-    return 1;
-
-  gima->init();
-  int retcode = 0;
-  while((retcode = gima->poll()) == 0) {}
-
-  gima.reset();
-  return retcode;
 }
