@@ -289,12 +289,15 @@ void MediaArchiverClient::doReceive()
 
 void MediaArchiverClient::launch(const std::string &cmdLine)
 {
-  m_encodeProcess.reset(popen(cmdLine.c_str(), "r"));
-  if(!m_encodeProcess)
+  auto handle = popen(cmdLine.c_str(), "r");
+  if(!handle)
   {
     throw std::runtime_error(
       std::string("could not start external command: ") + cmdLine);
   }
+
+  std::this_thread::sleep_for(std::chrono::seconds(2));
+  m_encodeProcess.reset(handle);
 }
 
 int MediaArchiverClient::waitForFinish(std::string &stdOut)

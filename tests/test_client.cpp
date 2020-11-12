@@ -41,8 +41,7 @@ public:
 
     ss << m_cfg.pathToEncoder << " " << m_encSettings.commandLineParameters
        << " -i \"" << path << "\" -o \"" << m_cfg.tempFolder << "/"
-       << OutTmpFileName << "." << m_encSettings.finalExtension
-       << "\" 1>/dev/null 2>&1";
+       << OutTmpFileName << m_encSettings.finalExtension << "\" 2>&1";
 
     string output;
     int retcode;
