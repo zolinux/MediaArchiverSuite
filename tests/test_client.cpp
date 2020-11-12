@@ -39,9 +39,10 @@ public:
     string outFile = path.substr(0, posExt) + "_archvd" +
       m_encSettings.finalExtension;
 
-    ss << m_cfg.pathToEncoder << " " << m_encSettings.commandLineParameters
-       << " -i \"" << path << "\" -o \"" << m_cfg.tempFolder << "/"
-       << OutTmpFileName << m_encSettings.finalExtension << "\" 2>&1";
+    ss << m_cfg.pathToEncoder << " -i \"" << path << "\" "
+       << m_encSettings.commandLineParameters << " \"" << m_cfg.tempFolder
+       << "/" << OutTmpFileName << m_encSettings.finalExtension
+       << "\" 2>&1";
 
     string output;
     int retcode;
@@ -67,7 +68,7 @@ TEST_CASE("ffprobe [pass]", "[ffprobe]")
 #ifdef WIN32
     "C:\\Users\\zoltan.dezsi\\Pictures\\2020\\2020-01-Itthon\\20200102_120937.mp4"
 #else
-    "~/Pictures/2021/file_example_MOV_480_700kB.mov"
+    "/mnt/c/Users/zoltan.dezsi/Pictures/2020/2020-01-Itthon/20200102_120937.mp4"
 #endif // WIN32
   );
 

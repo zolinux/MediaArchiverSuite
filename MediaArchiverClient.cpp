@@ -9,7 +9,6 @@
 #include <mutex>
 #include <thread>
 #include <chrono>
-#include <signal.h>
 #include <dirent.h>
 #include <regex>
 #include <random>
@@ -268,12 +267,11 @@ void MediaArchiverClient::doReceive()
         .error = m_stdOut.str()};
 
       std::stringstream cmd;
-      cmd << m_cfg.pathToEncoder << " "
-          << m_encSettings.commandLineParameters << " -i \""
-          << m_cfg.tempFolder << "/" << InTmpFileName << "."
-          << m_encSettings.fileExtension << "\" -o \"" << m_cfg.tempFolder
-          << "/" << OutTmpFileName << "." << m_encSettings.finalExtension
-          << "\" 1>/dev/null 2>&1";
+      cmd << m_cfg.pathToEncoder << " -i \"" << m_cfg.tempFolder << "/"
+          << InTmpFileName << "." << m_encSettings.fileExtension << "\" "
+          << m_encSettings.commandLineParameters << " \""
+          << m_cfg.tempFolder << "/" << OutTmpFileName << "."
+          << m_encSettings.finalExtension << "\" 2>&1";
 
       launch(cmd.str());
       m_mainState = MainStates::WaitForEncodingFinished;

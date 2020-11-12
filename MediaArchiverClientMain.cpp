@@ -1,3 +1,5 @@
+#include <signal.h>
+
 #include "MediaArchiverConfig.hpp"
 #include "MediaArchiverClientConfig.hpp"
 #include "MediaArchiverClient.hpp"

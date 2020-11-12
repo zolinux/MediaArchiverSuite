@@ -33,7 +33,7 @@ target_include_directories(MediaArchiverCommon
 )
 target_link_libraries(MediaArchiverCommon 
     PUBLIC rpc
-    PUBLIC $<$<BOOL:MINGW>:ws2_32>
+    PUBLIC $<$<BOOL:${MINGW}>:ws2_32>
 )
 
 add_library(MediaArchiverClient OBJECT
