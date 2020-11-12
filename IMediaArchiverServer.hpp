@@ -49,9 +49,10 @@ struct MediaEncoderSettings
   size_t fileLength;
   std::string encoderType;
   std::string fileExtension;
+  std::string finalExtension;
   std::string commandLineParameters;
-  MSGPACK_DEFINE_ARRAY_(
-    fileLength, encoderType, fileExtension, commandLineParameters)
+  MSGPACK_DEFINE_ARRAY_(fileLength, encoderType, fileExtension,
+    finalExtension, commandLineParameters)
 };
 
 struct EncodingResultInfo

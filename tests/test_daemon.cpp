@@ -70,6 +70,7 @@ void getNextFile(std::unique_ptr<ServerIf> &rpc, MediaEncoderSettings &mes)
   REQUIRE(success);
   REQUIRE(mes.fileLength > 0);
   REQUIRE(!mes.fileExtension.empty());
+  REQUIRE(!mes.finalExtension.empty());
   REQUIRE(!mes.commandLineParameters.empty());
 }
 

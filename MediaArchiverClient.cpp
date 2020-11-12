@@ -268,10 +268,11 @@ void MediaArchiverClient::doReceive()
         .error = m_stdOut.str()};
 
       std::stringstream cmd;
-      cmd << m_cfg.pathToEncoder << m_encSettings.commandLineParameters
-          << "-i \"" << m_cfg.tempFolder << "/" << InTmpFileName << "."
-          << m_encSettings.fileExtension << "-o \"" << m_cfg.tempFolder
-          << "/" << OutTmpFileName << "." << m_encSettings.fileExtension
+      cmd << m_cfg.pathToEncoder << " "
+          << m_encSettings.commandLineParameters << " -i \""
+          << m_cfg.tempFolder << "/" << InTmpFileName << "."
+          << m_encSettings.fileExtension << "\" -o \"" << m_cfg.tempFolder
+          << "/" << OutTmpFileName << "." << m_encSettings.finalExtension
           << "\" 1>/dev/null 2>&1";
 
       launch(cmd.str());
@@ -303,6 +304,7 @@ int MediaArchiverClient::waitForFinish(std::string &stdOut)
   while(!std::feof(m_encodeProcess.get()))
   {
     std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    memset(buffer.data(), 0, buffer.size());
     auto rd = fgets(buffer.data(), buffer.size(), m_encodeProcess.get());
     ss << buffer.data();
   }

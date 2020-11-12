@@ -547,6 +547,7 @@ bool MediaArchiverDaemon::getNextFile(ConnectedClient &cli,
 
   auto posExt = cli.originalFileName.find_last_of('.');
   cli.encSettings.fileExtension = cli.originalFileName.substr(posExt + 1);
+  cli.encSettings.finalExtension = m_cfg.finalExtension;
   settings = cli.encSettings;
   // todo: fill other members
   return srcId > 0;
