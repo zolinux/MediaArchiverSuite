@@ -270,7 +270,7 @@ void MediaArchiverClient::doReceive()
       cmd << m_cfg.pathToEncoder << " -i \"" << m_cfg.tempFolder << "/"
           << InTmpFileName << "." << m_encSettings.fileExtension << "\" "
           << m_encSettings.commandLineParameters << " \""
-          << m_cfg.tempFolder << "/" << OutTmpFileName << "."
+          << m_cfg.tempFolder << "/" << OutTmpFileName
           << m_encSettings.finalExtension << "\" 2>&1";
 
       launch(cmd.str());

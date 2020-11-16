@@ -300,7 +300,8 @@ void SQLite::addEncodedFile(const EncodedFile &file)
   string comment("NULL");
 
   if(!file.error.empty())
-    comment = string("'") + file.error + "'";
+    comment = string("'") + ExecSQL::escape(file.error) + "'";
+
 
   SQL << "update queue set status=" << file.result
       << ",start=" << ExecSQL::now << ",comment=" << comment

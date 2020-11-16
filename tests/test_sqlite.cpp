@@ -5,6 +5,17 @@
 
 using namespace MediaArchiver;
 
+TEST_CASE("escaping text (pass)", "[escape]")
+{
+  const std::string sRaw = "this 'is' string";
+  const std::string sEsc = "this ''is'' string";
+
+  REQUIRE(ExecSQL::escape(sRaw) == sEsc);
+
+  ExecSQL sql(nullptr);
+  sql << (int)80000 << (size_t)120000;
+}
+
 TEST_CASE("open db (pass)", "[sqlite]")
 {
   BasicFileInfo src42;
