@@ -11,6 +11,7 @@
 #include <chrono>
 #include <iomanip>
 #include <iostream>
+#include <regex>
 
 #include "IDatabase.hpp"
 using namespace std;
@@ -70,6 +71,17 @@ public:
   {
   } now;
 
+  static std::string escape(const std::string &s)
+  {
+    auto ns = std::regex_replace(s, std::regex("'"), "''");
+    return ns;
+  }
+
+  static std::string escape(const char *s)
+  {
+    return ExecSQL::escape(std::string(s));
+  }
+
   ExecSQL &operator<<(std::unique_ptr<SQLite::Sqlite3CallbackFunctor> &cb)
   {
     m_cb = cb.get();
@@ -77,30 +89,24 @@ public:
   }
   ExecSQL &operator<<(const std::string &s)
   {
-    m_ss << s;
+    std::string ns(s);
+    m_ss << ns;
     return *this;
   }
-  ExecSQL &operator<<(const char *s)
-  {
-    m_ss << s;
-    return *this;
-  }
+  ExecSQL &operator<<(const char *s) { return operator<<(std::string(s)); }
   ExecSQL &operator<<(int i)
   {
-    snprintf(m_buf, sizeof(m_buf), "%i", i);
-    m_ss << m_buf;
+    m_ss << std::to_string(i);
     return *this;
   }
   ExecSQL &operator<<(uint32_t i)
   {
-    snprintf(m_buf, sizeof(m_buf), "%u", i);
-    m_ss << m_buf;
+    m_ss << std::to_string(i);
     return *this;
   }
   ExecSQL &operator<<(size_t i)
   {
-    snprintf(m_buf, sizeof(m_buf), "%lu", i);
-    m_ss << m_buf;
+    m_ss << std::to_string(i);
     return *this;
   }
   ExecSQL &operator<<(std::_Put_time<char> i)

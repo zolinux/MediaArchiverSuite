@@ -532,7 +532,7 @@ bool MediaArchiverDaemon::getNextFile(ConnectedClient &cli,
       stringstream ss;
       ss << "-preset veryfast -c:v " << m_cfg.vCodec << " -c:a "
          << m_cfg.aCodec << " -crf " << m_cfg.crf << " -b:a "
-         << m_cfg.aBitRate;
+         << to_string(m_cfg.aBitRate);
       cli.encSettings.commandLineParameters = ss.str();
     }
   }

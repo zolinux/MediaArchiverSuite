@@ -1,6 +1,7 @@
 #define CATCH_CONFIG_MAIN
 #include <catch.hpp>
 
+#include "FileUtils.hpp"
 #include "MediaArchiverConfig.hpp"
 #include "MediaArchiverClient.hpp"
 
@@ -27,12 +28,11 @@ public:
   {
     int len = 0;
     REQUIRE_NOTHROW(len = getMovieLength(path));
-    REQUIRE(len == 7 * 60 + 35);
+    REQUIRE(len == 30);
   }
 
   void testEncoding(const string &path)
   {
-    int len = 0;
     stringstream ss;
 
     size_t posExt = path.rfind('.');
@@ -40,8 +40,7 @@ public:
       m_encSettings.finalExtension;
 
     ss << m_cfg.pathToEncoder << " -i \"" << path << "\" "
-       << m_encSettings.commandLineParameters << " \"" << m_cfg.tempFolder
-       << "/" << OutTmpFileName << m_encSettings.finalExtension
+       << m_encSettings.commandLineParameters << " \"" << outFile
        << "\" 2>&1";
 
     string output;
@@ -50,12 +49,20 @@ public:
     REQUIRE_NOTHROW(retcode = waitForFinish(output));
     cout << "Encoder output " << retcode << ": " << output << endl;
     REQUIRE_FALSE(retcode);
+
+    int outFileLen = 0;
+    REQUIRE_NOTHROW(outFileLen = getMovieLength(outFile));
+    REQUIRE(outFileLen > 0);
+
+    int inFileLen = 0;
+    REQUIRE_NOTHROW(inFileLen = getMovieLength(path));
+    REQUIRE(outFileLen == inFileLen);
   }
 
 private:
 };
 
-TEST_CASE("ffprobe [pass]", "[ffprobe]")
+TEST_CASE("ffmpeg [pass]", "[ffmpeg]")
 {
   ClientConfig cfg;
   auto mac = MediaArchiverConfig<ClientConfig>(cfg);
@@ -64,15 +71,9 @@ TEST_CASE("ffprobe [pass]", "[ffprobe]")
   REQUIRE_FALSE(cfg.pathToProbe.empty());
 
   TestClient tc(cfg);
-  const string srcName(
-#ifdef WIN32
-    "C:\\Users\\zoltan.dezsi\\Pictures\\2020\\2020-01-Itthon\\20200102_120937.mp4"
-#else
-    "/mnt/c/Users/zoltan.dezsi/Pictures/2020/2020-01-Itthon/20200102_120937.mp4"
-#endif // WIN32
-  );
+  const string srcName("../../test.avi");
 
   SECTION("FFPROBE") { tc.testFfprobe(srcName); }
-
   SECTION("ENCODING") { tc.testEncoding(srcName); }
+  REQUIRE(true);
 }
