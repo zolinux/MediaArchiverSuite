@@ -400,8 +400,7 @@ void MediaArchiverClient::doConvert()
       {
         std::stringstream cmd;
         cmd << m_cfg.pathToProbe << " \"" << m_cfg.tempFolder << "/"
-            << OutTmpFileName << "." << m_encSettings.finalExtension
-            << "\"";
+            << OutTmpFileName << m_encSettings.finalExtension << "\"";
         int lenOut = getMovieLength(cmd.str());
 
         if(lenOut <= 0)
