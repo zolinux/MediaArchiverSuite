@@ -267,8 +267,9 @@ void MediaArchiverClient::doReceive()
         .error = m_stdOut.str()};
 
       std::stringstream cmd;
-      cmd << m_cfg.pathToEncoder << " -i \"" << m_cfg.tempFolder << "/"
-          << InTmpFileName << "." << m_encSettings.fileExtension << "\" "
+      cmd << m_cfg.pathToEncoder << " -y -hide_banner -i \""
+          << m_cfg.tempFolder << "/" << InTmpFileName << "."
+          << m_encSettings.fileExtension << "\" "
           << m_encSettings.commandLineParameters << " \""
           << m_cfg.tempFolder << "/" << OutTmpFileName
           << m_encSettings.finalExtension << "\" 2>&1";
@@ -368,6 +369,7 @@ int MediaArchiverClient::getMovieLength(const std::string &path)
   }
   else
   {
+    std::cerr << "GetLength error: " << stdOut << std::endl;
     return -1;
   }
 }
@@ -393,7 +395,7 @@ void MediaArchiverClient::doConvert()
       do
       {
         std::stringstream cmd;
-        cmd << m_cfg.pathToProbe << "\"" << m_cfg.tempFolder << "/"
+        cmd << m_cfg.pathToProbe << " \"" << m_cfg.tempFolder << "/"
             << OutTmpFileName << "." << m_encSettings.fileExtension << "\"";
         int lenOut = getMovieLength(cmd.str());
 
@@ -405,7 +407,7 @@ void MediaArchiverClient::doConvert()
         }
 
         cmd.clear();
-        cmd << m_cfg.pathToProbe << "\"" << m_cfg.tempFolder << "/"
+        cmd << m_cfg.pathToProbe << " \"" << m_cfg.tempFolder << "/"
             << InTmpFileName << "." << m_encSettings.fileExtension << "\"";
         int lenIn = getMovieLength(cmd.str());
 
@@ -510,7 +512,6 @@ void MediaArchiverClient::removeTempFiles()
   {
     while((ent = readdir(dir)) != nullptr)
     {
-      printf("%s\n", ent->d_name);
       std::string s(ent->d_name);
       if(s.rfind(InTmpFileName, 0) == 0 || s.rfind(OutTmpFileName, 0) == 0)
       {

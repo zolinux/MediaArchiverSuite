@@ -39,7 +39,7 @@ public:
     string outFile = path.substr(0, posExt) + "_archvd" +
       m_encSettings.finalExtension;
 
-    ss << m_cfg.pathToEncoder << " -i \"" << path << "\" "
+    ss << m_cfg.pathToEncoder << " -y -hide_banner -i \"" << path << "\" "
        << m_encSettings.commandLineParameters << " \"" << outFile
        << "\" 2>&1";
 
