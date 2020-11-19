@@ -9,9 +9,13 @@
 #include <mutex>
 #include <thread>
 #include <chrono>
-#include <dirent.h>
 #include <regex>
 #include <random>
+
+#ifdef _MSVC_STL_VERSION
+#else
+#include <dirent.h>
+#endif
 
 #include "rpc/client.h"
 #include "rpc/rpc_error.h"
@@ -507,6 +511,33 @@ void MediaArchiverClient::doTransmit()
 
 void MediaArchiverClient::removeTempFiles()
 {
+#ifdef _MSVC_STL_VERSION
+  HANDLE dir;
+  WIN32_FIND_DATA file_data;
+
+  if((dir = FindFirstFile((m_cfg.tempFolder + "/*").c_str(),
+        &file_data)) ==
+    INVALID_HANDLE_VALUE)
+    return; /* No files found */
+
+  do
+  {
+    const std::string file_name = file_data.cFileName;
+    const std::string full_file_name = m_cfg.tempFolder + "/" +
+      file_name;
+    const bool is_directory = (file_data.dwFileAttributes &
+                                FILE_ATTRIBUTE_DIRECTORY) != 0;
+
+    if(file_name[0] == '.')
+      continue;
+
+    if(is_directory)
+      continue;
+
+  } while(FindNextFile(dir, &file_data));
+
+  FindClose(dir);
+#else
   DIR *dir;
   struct dirent *ent;
   if((dir = opendir(m_cfg.tempFolder.c_str())) != nullptr)
@@ -527,6 +558,7 @@ void MediaArchiverClient::removeTempFiles()
     std::cerr << "Could not open folder \"" << m_cfg.tempFolder
               << "\" for enumerating files" << std::endl;
   }
+#endif
 }
 
 void MediaArchiverClient::cleanUp()

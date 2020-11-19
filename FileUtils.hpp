@@ -1,7 +1,7 @@
 #ifndef __FILEUTILS_H__
 #define __FILEUTILS_H__
 
-#if defined(WIN32)
+#if defined(_MSVC_STL_VERSION)
   #include "FileCopierWindows.hpp"
 using FileUtils = FileCopierWindows;
 #else
