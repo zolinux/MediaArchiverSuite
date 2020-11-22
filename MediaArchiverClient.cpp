@@ -14,7 +14,7 @@
 
 #ifdef _MSVC_STL_VERSION
 #else
-#include <dirent.h>
+  #include <dirent.h>
 #endif
 
 #include "rpc/client.h"
@@ -22,6 +22,8 @@
 #include "MediaArchiverClient.hpp"
 #include "MediaArchiverConfig.hpp"
 #include "ServerIf.hpp"
+
+#include "loguru.hpp"
 
 using namespace MediaArchiver;
 
@@ -48,6 +50,7 @@ void MediaArchiverClient::init() {}
 
 void MediaArchiverClient::stop(bool forced)
 {
+  LOG_F(INFO, "%s stop requested", forced ? "FORCED" : "NORMAL");
   m_stopRequested = true;
   if(forced)
   {
@@ -139,17 +142,18 @@ void MediaArchiverClient::doAuth()
     m_authenticated = true;
     m_mainState = m_prevMainState;
     m_prevMainState = m_mainState;
+    LOG_F(1, "Auth OK");
   }
   catch(const rpc::timeout &e)
   {
-    std::cerr << "ERROR: " << e.what() << std::endl;
+    LOG_F(ERROR, "server timeout");
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     return;
   }
   catch(const rpc::rpc_error &e)
   {
+    LOG_F(ERROR, "server error: %s", e.what());
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    std::cerr << "ERROR: " << e.what() << '\n';
     return;
   }
   catch(const rpc::system_error &e)
@@ -168,8 +172,8 @@ void MediaArchiverClient::doIdle()
     m_shutdown = true;
     return;
   }
-  bool error = false;
   std::exception exc;
+  std::string errStr;
   MainStates next = m_mainState;
   try
   {
@@ -207,43 +211,41 @@ void MediaArchiverClient::doIdle()
   }
   catch(const rpc::system_error &e)
   {
-    error = true;
-    exc = e;
+    errStr = e.what();
     next = MainStates::WaitForReconnect;
     m_timeToWait = m_cfg.serverConnectionTimeout;
     m_startTime = std::chrono::steady_clock::now();
   }
   catch(const rpc::rpc_error &e)
   {
-    error = true;
-    exc = e;
+    errStr = e.what();
     next = MainStates::WaitForReconnect;
     m_timeToWait = m_cfg.reconnectDelay;
     m_startTime = std::chrono::steady_clock::now();
   }
   catch(const IOError &e)
   {
-    error = true;
-    exc = e;
+    errStr = e.what();
     // todo: handle error
   }
   catch(const std::exception &e)
   {
-    error = true;
-    exc = e;
+    errStr = e.what();
     next = MainStates::WaitForReconnect;
     m_timeToWait = m_cfg.reconnectDelay;
     m_startTime = std::chrono::steady_clock::now();
   }
 
-  if(error)
+  if(!errStr.empty())
   {
     m_authenticated = false;
-    std::cerr << "ERROR: " << exc.what() << '\n';
+    LOG_F(ERROR, "doIdle: %s", errStr.c_str());
   }
 
   if(next != m_mainState)
   {
+    LOG_F(2, "State change: %i -> %i -> %i", (int)m_prevMainState,
+      (int)m_mainState, (int)next);
     m_prevMainState = m_mainState;
     m_mainState = next;
   }
@@ -284,7 +286,7 @@ void MediaArchiverClient::doReceive()
   }
   catch(const std::exception &e)
   {
-    std::cerr << e.what() << std::endl;
+    LOG_F(ERROR, "doReceive: %s", e.what());
     m_srcFile.seekp(0, std::ios_base::beg);
     m_rpc->reset();
   }
@@ -292,9 +294,11 @@ void MediaArchiverClient::doReceive()
 
 void MediaArchiverClient::launch(const std::string &cmdLine)
 {
+  LOG_F(2, "launching: %s", cmdLine.c_str());
   auto handle = popen(cmdLine.c_str(), "r");
   if(!handle)
   {
+    LOG_F(ERROR, "could not launch '%s'", cmdLine.c_str());
     throw std::runtime_error(
       std::string("could not start external command: ") + cmdLine);
   }
@@ -317,6 +321,8 @@ int MediaArchiverClient::waitForFinish(std::string &stdOut)
 
   auto retcode = pclose(m_encodeProcess.release());
   stdOut = ss.str();
+  VLOG_F(retcode ? -2 : 2, "waitForFinish: return: %i, <%s>", retcode,
+    stdOut.c_str());
   return retcode;
 }
 
@@ -360,6 +366,7 @@ int MediaArchiverClient::getMovieLength(const std::string &path)
 
     if(m.size() != timeCount + 1)
     {
+      LOG_F(ERROR, "getMovieLength: Invalid output (%lu)", m.size());
       return -1;
     }
 
@@ -369,11 +376,12 @@ int MediaArchiverClient::getMovieLength(const std::string &path)
       auto tim = atoi(m[i + 1].str().c_str());
       dur += mult[i] * tim;
     }
+    LOG_F(1, "getMovieLength: duration (%u)", dur);
     return dur;
   }
   else
   {
-    std::cerr << "GetLength error: " << stdOut << std::endl;
+    LOG_F(ERROR, "getMovieLength!");
     return -1;
   }
 }
@@ -389,47 +397,51 @@ void MediaArchiverClient::doConvert()
     // EOF
     int retcode = -1;
     if(m_shutdown)
+    {
+      LOG_F(INFO, "doConvert: stopping encoding due to stop request");
       m_encodeProcess.reset();
+    }
     else
+    {
+      LOG_F(INFO, "doConvert: closing encoding process...");
       retcode = pclose(m_encodeProcess.release());
+    }
 
     // std::this_thread::sleep_for(std::chrono::seconds(1));
     if(retcode == 0)
     {
-      do
+      try
       {
         std::stringstream cmd;
-        cmd << m_cfg.pathToProbe << " \"" << m_cfg.tempFolder << "/"
-            << OutTmpFileName << m_encSettings.finalExtension << "\"";
-        int lenOut = getMovieLength(cmd.str());
+        cmd << m_cfg.tempFolder << "/" << OutTmpFileName
+            << m_encSettings.finalExtension;
+        std::string outFile = cmd.str();
+        int lenOut = getMovieLength(outFile);
 
         if(lenOut <= 0)
         {
-          std::cerr << "ERROR: output file size is 0 or probe error: "
-                    << lenOut << std::endl;
-          break;
+          LOG_F(ERROR, "output file size is 0 or probe error: %i", lenOut);
+          throw std::runtime_error("1");
         }
 
-        cmd.clear();
-        cmd << m_cfg.pathToProbe << " \"" << m_cfg.tempFolder << "/"
-            << InTmpFileName << "." << m_encSettings.fileExtension << "\"";
+        cmd = std::stringstream();
+        cmd << m_cfg.tempFolder << "/" << InTmpFileName << "."
+            << m_encSettings.fileExtension;
         int lenIn = getMovieLength(cmd.str());
 
         if(lenOut != lenIn)
         {
-          std::cerr << "ERROR: stream duration is different: " << lenIn
-                    << " != " << lenOut << std::endl;
-          break;
+          LOG_F(
+            ERROR, "stream duration is different: %i != %i", lenIn, lenOut);
+          throw std::runtime_error("2");
         }
 
-        m_dstFile.open(m_cfg.tempFolder + "/" + OutTmpFileName,
-          std::ios::in | std::ios::binary);
+        m_dstFile.open(outFile, std::ios::in | std::ios::binary);
 
         if(!m_dstFile.is_open())
         {
-          std::cerr << "ERROR: could not open output file for getting length"
-                    << std::endl;
-          break;
+          LOG_F(ERROR, "could not open output file for getting length");
+          throw std::runtime_error("3");
         }
 
         m_dstFile.seekg(0, std::ios::end);
@@ -439,8 +451,12 @@ void MediaArchiverClient::doConvert()
         // everything ok, Connect to server and send status
         m_encResult.result = EncodingResultInfo::EncodingResult::OK;
         m_encResult.error.clear();
-
-      } while(false);
+        LOG_F(INFO, "doConvert: File opened to stream to server");
+      }
+      catch(std::exception &e)
+      {
+        LOG_F(ERROR, "doConvert: %s", e.what());
+      }
     }
     m_mainState = MainStates::SendResult;
   }
@@ -464,14 +480,13 @@ void MediaArchiverClient::doSendResult()
     }
     else
     { // no success
-      std::cerr << "Notified server about failed encoding" << std::endl;
       cleanUp();
       m_mainState = MainStates::Idle;
     }
   }
   catch(const std::exception &e)
   {
-    std::cerr << e.what() << '\n';
+    LOG_F(ERROR, "doSendResult: %s", e.what());
     m_timeToWait = m_cfg.reconnectDelay;
     m_startTime = std::chrono::steady_clock::now();
     m_prevMainState = m_mainState;
@@ -502,7 +517,7 @@ void MediaArchiverClient::doTransmit()
   }
   catch(const std::exception &e)
   {
-    std::cerr << e.what() << '\n';
+    LOG_F(ERROR, "doTransmit: %s", e.what());
     m_dstFile.seekg(0, std::ios_base::beg);
     m_rpc->reset();
   }
@@ -514,16 +529,14 @@ void MediaArchiverClient::removeTempFiles()
   HANDLE dir;
   WIN32_FIND_DATA file_data;
 
-  if((dir = FindFirstFile((m_cfg.tempFolder + "/*").c_str(),
-        &file_data)) ==
+  if((dir = FindFirstFile((m_cfg.tempFolder + "/*").c_str(), &file_data)) ==
     INVALID_HANDLE_VALUE)
     return; /* No files found */
 
   do
   {
     const std::string file_name = file_data.cFileName;
-    const std::string full_file_name = m_cfg.tempFolder + "/" +
-      file_name;
+    const std::string full_file_name = m_cfg.tempFolder + "/" + file_name;
     const bool is_directory = (file_data.dwFileAttributes &
                                 FILE_ATTRIBUTE_DIRECTORY) != 0;
 
@@ -532,6 +545,8 @@ void MediaArchiverClient::removeTempFiles()
 
     if(is_directory)
       continue;
+
+    LOG_F(1, "Removing Temp file: %s", ent->d_name);
 
   } while(FindNextFile(dir, &file_data));
 
@@ -546,6 +561,7 @@ void MediaArchiverClient::removeTempFiles()
       std::string s(ent->d_name);
       if(s.rfind(InTmpFileName, 0) == 0 || s.rfind(OutTmpFileName, 0) == 0)
       {
+        LOG_F(1, "Removing Temp file: %s", ent->d_name);
         std::remove(ent->d_name);
       }
     }
@@ -562,6 +578,7 @@ void MediaArchiverClient::removeTempFiles()
 
 void MediaArchiverClient::cleanUp()
 {
+  LOG_F(INFO, "Cleaning up...");
   if(m_encodeProcess)
     pclose(m_encodeProcess.release());
 
@@ -601,8 +618,7 @@ int MediaArchiverClient::poll()
       }
       catch(const std::exception &e)
       {
-        std::cerr << "Error during shutting down: " << e.what()
-                  << std::endl;
+        LOG_F(ERROR, "Error during shutting down: %s", e.what());
       }
 
       m_rpc.reset();

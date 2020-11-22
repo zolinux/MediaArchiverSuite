@@ -21,6 +21,8 @@
 #include "FileSystemWatcher.hpp"
 #include "SQLite.hpp"
 
+#include "loguru.hpp"
+
 #ifdef WIN32
   #include "FileCopierWindows.hpp"
   #define FileCopier FileCopierWindows
@@ -91,13 +93,14 @@ void MediaArchiverDaemon::init()
 
 void MediaArchiverDaemon::start()
 {
+  LOG_F(1, "Starting service");
   try
   {
     m_srv.async_run(1);
   }
   catch(const std::exception &e)
   {
-    std::cerr << "Could not start service: " << e.what() << std::endl;
+    LOG_F(FATAL, "Could not start service: %s", e.what());
     stop(true);
     return;
   }
@@ -123,6 +126,9 @@ void MediaArchiverDaemon::start()
     const FileToMove ftm = std::move(m_filesToMove.front());
     m_filesToMove.pop_front();
 
+    LOG_F(INFO, "Archive File of id %u(%s) ready to move",
+      ftm.result.originalFileId, ftm.result.fileName.c_str());
+
     if(!ftm.result.originalFileId)
     {
       continue;
@@ -133,6 +139,9 @@ void MediaArchiverDaemon::start()
     if(ftm.result.result != EncodingResultInfo::EncodingResult::OK ||
       ftm.result.fileLength == 0)
     {
+      LOG_F(ERROR, "Process (file id: %u) resulted in error %i: %s",
+        ftm.result.originalFileId, ftm.result.result,
+        ftm.result.error.c_str());
       m_db.addEncodedFile(ftm.result);
     }
     else
@@ -141,11 +150,14 @@ void MediaArchiverDaemon::start()
       {
         FileCopier().moveFile(
           ftm.tmp.c_str(), ftm.result.fileName.c_str(), &ftm.atime);
+        LOG_F(1, "File %u '%s' was moved to place",
+          ftm.result.originalFileId, ftm.result.fileName.c_str());
         m_db.addEncodedFile(ftm.result);
       }
       catch(const std::exception &e)
       {
-        std::cerr << e.what() << '\n';
+        LOG_F(ERROR, "File %u (%s) move error: %s",
+          ftm.result.originalFileId, ftm.result.fileName.c_str(), e.what());
         error = e.what();
       }
     }
@@ -186,6 +198,7 @@ bool MediaArchiverDaemon::isIdle()
 void MediaArchiverDaemon::stop(bool forced)
 {
   m_stopRequested = true;
+  LOG_F(1, "%s stopping requested", forced ? "FORCED" : "NORMAL");
 
   if(forced) {}
 }
@@ -200,26 +213,39 @@ MediaArchiverDaemon::MediaArchiverDaemon(
 
   m_srv.bind(RpcFunctions::getVersion, []() -> uint32_t {
     auto id = rpc::this_session().id();
+    LOG_F(INFO, "getVersion requested (%lX)", id);
     return 1;
   });
 
-  m_srv.bind(RpcFunctions::authenticate,
-    [&](const string &token) -> void { this->authenticate(token); });
+  m_srv.bind(RpcFunctions::authenticate, [&](const string &token) -> void {
+    LOG_F(INFO, "Auth requested (%lX): %s", rpc::this_session().id(),
+      token.c_str());
+    this->authenticate(token);
+  });
 
-  m_srv.bind(RpcFunctions::reset, [&]() -> void { this->reset(); });
+  m_srv.bind(RpcFunctions::reset, [&]() -> void {
+    LOG_F(INFO, "Reset transmission requested (%lX)s",
+      rpc::this_session().id());
+    this->reset();
+  });
 
-  m_srv.bind(RpcFunctions::abort, [&]() -> void { this->abort(); });
+  m_srv.bind(RpcFunctions::abort, [&]() -> void {
+    LOG_F(INFO, "Abort requested (%lX)", rpc::this_session().id());
+    this->abort();
+  });
 
   m_srv.bind(RpcFunctions::getNextFile,
     [&](const MediaFileRequirements &filter,
       MediaEncoderSettings &settings) -> MediaEncoderSettings {
+      LOG_SCOPE_F(INFO, "getNextFile");
       try
       {
         auto &cli = checkClient();
         getNextFile(cli, filter, settings);
       }
-      catch(const std::exception &)
+      catch(const std::exception &e)
       {
+        LOG_F(ERROR, "getNextFile error: %s", e.what());
         rpc::this_handler().respond_error(string("Forbidden"));
       }
 
@@ -228,13 +254,14 @@ MediaArchiverDaemon::MediaArchiverDaemon(
 
   m_srv.bind(
     RpcFunctions::postFile, [&](const EncodingResultInfo &result) -> void {
+      LOG_SCOPE_F(INFO, "postFile");
       try
       {
         this->postFile(result);
       }
       catch(const std::exception &e)
       {
-        std::cerr << e.what() << '\n';
+        LOG_F(ERROR, "PostFile: %s", e.what());
         rpc::this_handler().respond_error(
           std::string("I/O error") + e.what());
       }
@@ -248,7 +275,8 @@ MediaArchiverDaemon::MediaArchiverDaemon(
     }
     catch(const std::exception &e)
     {
-      std::cerr << e.what() << '\n';
+      LOG_F(
+        ERROR, "WriteChunk (%lX): %s", rpc::this_session().id(), e.what());
       rpc::this_handler().respond_error(
         std::string("I/O error") + e.what());
     }
@@ -264,7 +292,8 @@ MediaArchiverDaemon::MediaArchiverDaemon(
     }
     catch(const std::exception &e)
     {
-      std::cerr << e.what() << '\n';
+      LOG_F(
+        ERROR, "ReadChunk (%lX): %s", rpc::this_session().id(), e.what());
       rpc::this_handler().respond_error(
         std::string("I/O error:") + e.what());
     }
@@ -549,8 +578,18 @@ bool MediaArchiverDaemon::getNextFile(ConnectedClient &cli,
   cli.encSettings.fileExtension = cli.originalFileName.substr(posExt + 1);
   cli.encSettings.finalExtension = m_cfg.finalExtension;
   settings = cli.encSettings;
-  // todo: fill other members
-  return srcId > 0;
+
+  if(srcId > 0)
+  {
+    LOG_F(INFO, "Next file to process %u (%s)", cli.originalFileId,
+      cli.originalFileName.c_str());
+    return true;
+  }
+  else
+  {
+    LOG_F(1, "No files found to process");
+    return false;
+  }
 }
 
 /**
@@ -642,6 +681,8 @@ void MediaArchiverDaemon::postFile(const EncodingResultInfo &result)
   else
   {
     // error during encoding, no data will be received
+    LOG_F(ERROR, "Encoding failed for id %u (%s)", cli.originalFileId,
+      cli.originalFileName.c_str());
     std::lock_guard<std::mutex> lck(m_mtxFileMove);
     prepareNewSession(cli);
     m_cv.notify_all();
@@ -669,6 +710,7 @@ bool MediaArchiverDaemon::writeChunk(const std::vector<char> &data)
     // add file to queue for moving it to place in main thread
     prepareNewSession(cli);
 
+    LOG_F(INFO, "Copying finished, file can be moved");
     // send signal to main loop to start moving file...
     m_cv.notify_all();
   }
@@ -723,26 +765,24 @@ ConnectedClient &MediaArchiverDaemon::checkClient()
 
 int main(int argc, char **argv)
 {
-  // std::locale locale(std::locale(""), new no_grouping);
-  // std::locale::global(locale);
-  // std::setlocale(LC_NUMERIC, "C");
-  // stringstream ss_;
-  // ss_ << 66677788;
-  // std::cout << 12345678u << ": " << std::locale().name() << "--"
-  //           << ss_.str() << endl;
+  loguru::g_internal_verbosity = 1;
+  loguru::init(argc, argv,
+    loguru::Options{.main_thread_name = "mainThread",
+      .signals = {.sigint = false}});
+
+  loguru::add_file(
+    "daemon.log", loguru::FileMode::Append, loguru::Verbosity_MAX);
 
   std::string cfgFileName = "MediaArchiver.cfg";
   int c;
   bool showHelp = false;
   bool doFork = true;
-  int verbosity = 1;
   while((c = getopt(argc, argv, "c:nvh")) != -1)
   {
     switch(c)
     {
       case 'c': cfgFileName = optarg; break;
       case 'n': doFork = false; break;
-      case 'v': verbosity++; break;
       case 'h': showHelp = true; break;
 
       default: break;
@@ -754,7 +794,7 @@ int main(int argc, char **argv)
     cout
       << "Usage: " << argv[0] << " [-nvh] [-c configFile]" << endl
       << "\t-n\t\tno fork, process remains in foreground" << endl
-      << "\t-v\t\tincrease verbosity" << endl
+      << "\t-v\t\verbosity level (-9 fatal -> 0 info -> 9 all)" << endl
       << "\t-h\t\tshow this help" << endl
       << "\t-c\t\tconfig file to use (by default MediaArchiver.cfg if used in local folder"
       << endl;
@@ -782,7 +822,7 @@ int main(int argc, char **argv)
 
   if(folders.size() < 1)
   {
-    std::cerr << "Missing media folder(s)" << std::endl;
+    LOG_F(FATAL, "Missing media folder(s)");
     return 1;
   }
 
@@ -790,9 +830,7 @@ int main(int argc, char **argv)
   {
     switch(fork())
     {
-      case -1:
-        std::cerr << "Could not fork: " << errno << std::endl;
-        return 2;
+      case -1: LOG_F(FATAL, "Could not fork: %i", errno); return 2;
       case 0: break;
       default: return 0;
     }
@@ -807,7 +845,7 @@ int main(int argc, char **argv)
     MediaArchiver::FileSystemWatcher::create(*gima.get(), folders));
 
   gima->start();
-
+  LOG_F(INFO, "Exiting...");
   fsw.reset();
   gima.reset();
   return 0;

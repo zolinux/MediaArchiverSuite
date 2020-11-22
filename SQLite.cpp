@@ -1,20 +1,26 @@
 #include "SQLite.hpp"
 
+#include "loguru.hpp"
+
 namespace MediaArchiver
 {
 SQLite::SQLite()
   : m_db(nullptr)
 {
 }
+
 SQLite::~SQLite()
 {
   if(m_db)
   {
+    LOG_F(1, "Closing database");
     sqlite3_close(m_db);
     m_db = nullptr;
   }
 }
+
 void SQLite::init() {}
+
 void SQLite::connect(const char *connectionString, bool create)
 {
   if(m_db)
@@ -40,6 +46,7 @@ void SQLite::connect(const char *connectionString, bool create)
       throw DBError(DBError::DBErrorCodes::EmptyDatabase,
         "Database is not initialized");
   }
+  LOG_F(2, "Database opened");
 }
 
 int SQLite::sqliteCallbackInvoker(
@@ -48,6 +55,7 @@ int SQLite::sqliteCallbackInvoker(
   return (*static_cast<Sqlite3CallbackFunctor *>(ptr))(
     ptr, argc, fields, names);
 }
+
 bool SQLite::isDBInitialized() const
 {
   int tables = 0;
@@ -79,6 +87,7 @@ bool SQLite::isDBInitialized() const
     << "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'";
   return tables == 3;
 }
+
 void SQLite::setupTables()
 {
   SQL
@@ -88,12 +97,17 @@ void SQLite::setupTables()
        "CREATE TABLE queue (id INTEGER, status INTEGER, count INTEGER, start timestamp, comment TEXT);"
        "COMMIT;";
 }
+
 void SQLite::execSql(const char *sql, sqlite3_callback cb, void *data) const
 {
   char *zErrMsg = nullptr;
   auto rc = sqlite3_exec(m_db, sql, cb, data, &zErrMsg);
+  auto isError = rc != SQLITE_OK && string("query aborted") != zErrMsg;
 
-  if(rc != SQLITE_OK && string("query aborted") != zErrMsg)
+  VLOG_F(isError ? -2 : 4, "SQL returned: '%s' (statement: %s)",
+    rc == SQLITE_OK ? "OK" : zErrMsg, sql);
+
+  if(isError)
   {
     string errorStr(zErrMsg);
     sqlite3_free(zErrMsg);
@@ -101,10 +115,12 @@ void SQLite::execSql(const char *sql, sqlite3_callback cb, void *data) const
     throw DBError(DBError::DBErrorCodes::SqlError, s);
   }
 }
+
 void SQLite::disconnect()
 {
   checkDBOpened();
 }
+
 uint32_t SQLite::getNextFile(
   const MediaFileRequirements &filter, BasicFileInfo &file)
 {
@@ -176,7 +192,7 @@ uint32_t SQLite::addFile(
 {
   lock_guard<mutex> lck(m_mtx);
   checkDBOpened();
-
+  LOG_SCOPE_F(3, "SQLite::addFile");
   bool srcGiven = src != nullptr && !src->fileName.empty();
   bool dstGiven = dst != nullptr && !dst->fileName.empty();
 
@@ -186,6 +202,11 @@ uint32_t SQLite::addFile(
   bool putToQueue = false;
   string archiveName;
   auto cb = unique_ptr<Sqlite3CallbackFunctor>();
+
+  LOG_F(3, "src: %s, dst: %s, q: %s",
+    src == nullptr ? "NULL" : src->fileName.c_str(),
+    dst == nullptr ? "NULL" : dst->fileName.c_str(),
+    queue ? "true" : "false");
 
   // check if file exists
   if(srcGiven)
@@ -235,8 +256,9 @@ uint32_t SQLite::addFile(
     {
       if(dst->fileName.compare(archiveName) != 0)
       {
-        cerr << "Destination file is already present with another name: <"
-             << dst->fileName << "> != <" << archiveName << ">" << endl;
+        LOG_F(ERROR,
+          "Destination file is already present with another name: <%s> != <%s>",
+          dst->fileName.c_str(), archiveName.c_str());
       }
       else
       {
@@ -262,8 +284,8 @@ uint32_t SQLite::addFile(
 
     if(!archiveName.empty() && srcId != srcId2)
     {
-      cerr << "different Ids for encoded file: " << srcId << "!=" << srcId2
-           << " file: " << dst->fileName << endl;
+      LOG_F(ERROR, "different Ids <%u>!= <%u> for encoded file:%s ", srcId,
+        srcId2, dst->fileName.c_str());
     }
 
     if(srcId)

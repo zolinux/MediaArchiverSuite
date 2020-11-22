@@ -4,6 +4,8 @@
 #include "MediaArchiverClientConfig.hpp"
 #include "MediaArchiverClient.hpp"
 
+#include "loguru.hpp"
+
 static std::unique_ptr<MediaArchiver::MediaArchiverClient> gima;
 
 static MediaArchiver::ClientConfig gCfg{
@@ -26,6 +28,7 @@ static MediaArchiver::ClientConfig gCfg{
 // Define the function to be called when ctrl-c (SIGINT) is sent to process
 void signal_callback_handler(int signum)
 {
+  LOG_F(ERROR, "Signal caught: %i", signum);
   if(!gima)
   {
     exit(signum);
@@ -50,8 +53,15 @@ void signal_callback_handler(int signum)
 
 int main(int argc, char **argv)
 {
+  loguru::g_internal_verbosity = 1;
+  loguru::init(argc, argv,
+    loguru::Options{.main_thread_name = "mainThread",
+      .signals = {.sigint = false}});
+      
+  loguru::add_file(
+    "client.log", loguru::FileMode::Append, loguru::Verbosity_MAX);
+    
   // load configuration
-
   {
     auto mac =
       MediaArchiver::MediaArchiverConfig<MediaArchiver::ClientConfig>(gCfg);

@@ -1,3 +1,6 @@
 [submodule "rpclib"]
 	path = rpclib
 	url = git@github.com:qchateau/rpclib.git
+[submodule "loguru"]
+	path = loguru
+	url = git@github.com:emilk/loguru.git
