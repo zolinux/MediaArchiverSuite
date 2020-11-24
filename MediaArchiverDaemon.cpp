@@ -254,7 +254,7 @@ MediaArchiverDaemon::MediaArchiverDaemon(
 
   m_srv.bind(
     RpcFunctions::postFile, [&](const EncodingResultInfo &result) -> void {
-      LOG_SCOPE_F(INFO, "postFile");
+      LOG_F(3, "postFile");
       try
       {
         this->postFile(result);
@@ -704,13 +704,13 @@ bool MediaArchiverDaemon::writeChunk(const std::vector<char> &data)
     return true;
   }
   {
+    LOG_F(INFO, "writeChunk: Copying finished, file can be moved");
     std::lock_guard<std::mutex> lck(m_mtxFileMove);
     cli.outFile.close();
 
     // add file to queue for moving it to place in main thread
     prepareNewSession(cli);
 
-    LOG_F(INFO, "Copying finished, file can be moved");
     // send signal to main loop to start moving file...
     m_cv.notify_all();
   }
