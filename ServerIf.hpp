@@ -57,8 +57,8 @@ public:
     MediaEncoderSettings &settings) override
   {
     LOG_F(INFO, "Requesting next file...");
-    settings = m_rpc->call(RpcFunctions::getNextFile, filter, settings)
-                 .as<MediaEncoderSettings>();
+    auto res = m_rpc->call(RpcFunctions::getNextFile, filter);
+    settings = res.as<MediaEncoderSettings>();
     LOG_F(INFO, "SRC File length: %lu", settings.fileLength);
     return settings.fileLength > 0;
   }

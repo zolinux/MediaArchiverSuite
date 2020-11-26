@@ -58,6 +58,11 @@ static MediaArchiver::DaemonConfig gCfg{
   .resultFileSuffix = "_archived",
 };
 
+namespace
+{
+const char gNotAuthenticatedError[] = "Client not authenticated!";
+}
+
 // Define the function to be called when ctrl-c (SIGINT) is sent to process
 void signal_callback_handler(int signum)
 {
@@ -235,19 +240,32 @@ MediaArchiverDaemon::MediaArchiverDaemon(
   });
 
   m_srv.bind(RpcFunctions::getNextFile,
-    [&](const MediaFileRequirements &filter,
-      MediaEncoderSettings &settings) -> MediaEncoderSettings {
+    [&](const MediaFileRequirements &filter) -> MediaEncoderSettings {
       LOG_SCOPE_F(INFO, "getNextFile");
-      try
+      MediaEncoderSettings settings
       {
-        auto &cli = checkClient();
-        getNextFile(cli, filter, settings);
-      }
-      catch(const std::exception &e)
+        .fileLength = 0
+      };
+
+      do
       {
-        LOG_F(ERROR, "getNextFile error: %s", e.what());
-        rpc::this_handler().respond_error(string("Forbidden"));
-      }
+        try
+        {
+          auto &cli = checkClient();
+
+          getNextFile(cli, filter, settings);
+          break;
+        }
+        catch(const std::exception &e)
+        {
+          LOG_F(ERROR, "getNextFile error: %s", e.what());
+          if(!string(e.what()).compare(0, sizeof(::gNotAuthenticatedError),
+               ::gNotAuthenticatedError))
+          {
+            rpc::this_handler().respond_error(e.what());
+          }
+        }
+      } while(true);
 
       return settings;
     });
@@ -393,9 +411,11 @@ void MediaArchiverDaemon::onFileSystemChange(
 
   size_t size[2];
 
+  LOG_F(4, "onFileSystemChange: e=%i, src=%s, dst=%s", static_cast<int>(e), src.c_str(), dst.c_str());
   if(!dst.empty())
   {
     size[1] = FileCopier().getFileSize(dst.c_str());
+    LOG_F(4, "dst size: %lu", size[1]);
   }
   else
     return;
@@ -520,8 +540,8 @@ void MediaArchiverDaemon::abort()
 
   lock_guard<mutex> lck(m_mtxFileMove);
   m_db.reset(cli.originalFileId);
-  cli.inFile.clear();
-  cli.outFile.clear();
+  cli.inFile = ifstream();
+  cli.outFile = ofstream();
   cli.originalFileId = 0;
   cli.tempFileName = "";
   cli.originalFileName = "";
@@ -535,11 +555,18 @@ bool MediaArchiverDaemon::getNextFile(ConnectedClient &cli,
   BasicFileInfo fi;
   if(cli.inFile.is_open())
   {
-    throw std::runtime_error("A file is already open for reading");
+    stringstream ss;
+    ss << "The file " << cli.originalFileId << " <" << cli.originalFileName
+       << "> is already open for reading";
+    throw std::runtime_error(ss.str());
   }
+
   if(cli.outFile.is_open())
   {
-    throw std::runtime_error("An output file is already open for writing");
+    stringstream ss;
+    ss << "The file " << cli.originalFileId << " <" << cli.tempFileName
+       << "> is already open for writing";
+    throw std::runtime_error(ss.str());
   }
   cli.originalFileId = 0;
   cli.filter = filter;
@@ -550,12 +577,20 @@ bool MediaArchiverDaemon::getNextFile(ConnectedClient &cli,
     srcId = m_db.getNextFile(cli.filter, fi);
     if(srcId > 0)
     {
-      FileCopier().getFileTimes(fi.fileName.c_str(), cli.times);
-      cli.inFile.open(fi.fileName, ios_base::openmode::_S_in);
-      if(cli.inFile.fail())
+      if(!fi.fileSize)
+      {
+        stringstream ss;
+        ss << "File <" << fi.fileName << "> skipped due to 0 length";
+        throw runtime_error(ss.str());
+      }
+
+      ifstream inFile(fi.fileName, ios::in);
+      if(!inFile.is_open())
       {
         throw IOError(string("Could not open file: ") + fi.fileName);
       }
+      FileCopier().getFileTimes(fi.fileName.c_str(), cli.times);
+      cli.inFile = move(inFile);
       cli.encSettings.fileLength = fi.fileSize;
       cli.originalFileName = fi.fileName;
       stringstream ss;
@@ -752,14 +787,22 @@ void MediaArchiverDaemon::prepareNewSession(ConnectedClient &cli)
   cli.originalFileName = "";
   cli.encSettings = MediaEncoderSettings();
   cli.encResult = EncodingResultInfo();
-  cli.inFile.clear();
-  cli.outFile.clear();
+  cli.inFile = ifstream();
+  cli.outFile = ofstream();
 }
 
 ConnectedClient &MediaArchiverDaemon::checkClient()
 {
-  auto &cli = m_connections.at(rpc::this_session().id());
-  return cli;
+  try
+  {
+    auto &cli = m_connections.at(rpc::this_session().id());
+    return cli;
+  }
+  catch(const std::exception &e)
+  {
+    LOG_F(ERROR, "Client not authenticated!");
+    throw;
+  }
 }
 }
 

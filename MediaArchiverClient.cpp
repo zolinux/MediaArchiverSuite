@@ -44,6 +44,7 @@ MediaArchiverClient::MediaArchiverClient(const ClientConfig &cfg)
 MediaArchiverClient::~MediaArchiverClient()
 {
   cleanUp();
+  m_rpc.reset();
 }
 
 void MediaArchiverClient::init() {}
@@ -238,7 +239,7 @@ void MediaArchiverClient::doIdle()
 
   if(!errStr.empty())
   {
-    m_authenticated = false;
+    //m_authenticated = false;
     LOG_F(ERROR, "doIdle: %s", errStr.c_str());
   }
 
@@ -288,7 +289,6 @@ void MediaArchiverClient::doReceive()
   {
     LOG_F(ERROR, "doReceive: %s", e.what());
     m_srcFile.seekp(0, std::ios_base::beg);
-    m_rpc->reset();
   }
 }
 
@@ -519,7 +519,6 @@ void MediaArchiverClient::doTransmit()
   {
     LOG_F(ERROR, "doTransmit: %s", e.what());
     m_dstFile.seekg(0, std::ios_base::beg);
-    m_rpc->reset();
   }
 }
 
@@ -589,7 +588,6 @@ void MediaArchiverClient::cleanUp()
     m_dstFile.close();
 
   removeTempFiles();
-  m_rpc.reset();
 }
 
 int MediaArchiverClient::poll()
@@ -624,6 +622,7 @@ int MediaArchiverClient::poll()
       m_rpc.reset();
     }
     cleanUp();
+    m_rpc.reset();
     return 1;
   }
 

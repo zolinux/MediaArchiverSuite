@@ -12,8 +12,8 @@
 
 namespace MediaArchiver
 {
-const uint32_t FileSystemWatcherLinux::InotifyFlags = IN_CREATE |
-  IN_DELETE | IN_DELETE_SELF | IN_MOVE | IN_MODIFY | IN_ONLYDIR;
+const uint32_t FileSystemWatcherLinux::InotifyFlags = IN_DELETE |
+  IN_DELETE_SELF | IN_MOVE | IN_CLOSE | IN_ONLYDIR;
 
 const std::chrono::milliseconds FileSystemWatcherLinux::MoveTimeout =
   std::chrono::milliseconds(250);
@@ -207,6 +207,9 @@ void FileSystemWatcherLinux::handleInotifyEvent(
         IFileSystemChangeListener::EventType::Unmounted, fileName,
         fileName);
     }
+    else if(e->mask & IN_CLOSE)
+    {
+    }
     else
     { // ToDo: move directories, add to watch
       std::cerr << "directory " << fileName << " was " << e->mask
@@ -232,9 +235,9 @@ void FileSystemWatcherLinux::handleInotifyEvent(
       std::cerr << "movePending ";
     }
 
-    if(e->mask & IN_CREATE)
+    if(e->mask & IN_CLOSE_WRITE)
     {
-      std::cerr << "created ";
+      std::cerr << "created";
       // file created
       m_dst.onFileSystemChange(
         IFileSystemChangeListener::EventType::FileCreated, "", fileName);
@@ -269,6 +272,10 @@ void FileSystemWatcherLinux::handleInotifyEvent(
         m_dst.onFileSystemChange(
           IFileSystemChangeListener::EventType::FileMoved, src, dst);
       }
+    }
+    else if(e->mask & IN_CLOSE_NOWRITE)
+    {
+      std::cerr << "existing file closed: " << e->mask;
     }
     else
     {
