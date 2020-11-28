@@ -242,10 +242,7 @@ MediaArchiverDaemon::MediaArchiverDaemon(
   m_srv.bind(RpcFunctions::getNextFile,
     [&](const MediaFileRequirements &filter) -> MediaEncoderSettings {
       LOG_SCOPE_F(INFO, "getNextFile");
-      MediaEncoderSettings settings
-      {
-        .fileLength = 0
-      };
+      MediaEncoderSettings settings{.fileLength = 0};
 
       do
       {
@@ -411,7 +408,8 @@ void MediaArchiverDaemon::onFileSystemChange(
 
   size_t size[2];
 
-  LOG_F(4, "onFileSystemChange: e=%i, src=%s, dst=%s", static_cast<int>(e), src.c_str(), dst.c_str());
+  LOG_F(4, "onFileSystemChange: e=%i, src=%s, dst=%s", static_cast<int>(e),
+    src.c_str(), dst.c_str());
   if(!dst.empty())
   {
     size[1] = FileCopier().getFileSize(dst.c_str());
@@ -809,9 +807,12 @@ ConnectedClient &MediaArchiverDaemon::checkClient()
 int main(int argc, char **argv)
 {
   loguru::g_internal_verbosity = 1;
-  loguru::init(argc, argv,
-    loguru::Options{.main_thread_name = "mainThread",
-      .signals = {.sigint = false}});
+  loguru::SignalOptions sigOpts;
+  loguru::Options opts;
+
+  sigOpts.sigint = false;
+  opts.signals = sigOpts;
+  loguru::init(argc, argv, opts);
 
   loguru::add_file(
     "daemon.log", loguru::FileMode::Append, loguru::Verbosity_MAX);
