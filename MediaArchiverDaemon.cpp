@@ -74,17 +74,14 @@ void signal_callback_handler(int signum)
   bool forced = signum != SIGINT || gima->isStopRequested();
   if(!forced)
   {
+    LOG_F(WARNING,
+      "Termination requested after finishing the current encoding step...");
     gima->stop(false);
-    std::cerr
-      << "Termination requested after finishing the current encoding step..."
-      << std::endl;
   }
   else
   {
-    std::cerr << "Aborting process..." << std::endl;
+    LOG_F(WARNING, "Aborting process...");
     gima->stop(true);
-    // Terminate program
-    // exit(signum);
   }
 }
 
@@ -806,26 +803,22 @@ ConnectedClient &MediaArchiverDaemon::checkClient()
 
 int main(int argc, char **argv)
 {
-  loguru::g_internal_verbosity = 1;
-  loguru::SignalOptions sigOpts;
-  loguru::Options opts;
-
-  sigOpts.sigint = false;
-  opts.signals = sigOpts;
-  loguru::init(argc, argv, opts);
-
-  loguru::add_file(
-    "daemon.log", loguru::FileMode::Append, loguru::Verbosity_MAX);
-
   std::string cfgFileName = "MediaArchiver.cfg";
+  std::string logFileName = "/var/log/MediaArchiver.log";
   int c;
+  auto v = loguru::Verbosity_INFO;
   bool showHelp = false;
   bool doFork = true;
-  while((c = getopt(argc, argv, "c:nvh")) != -1)
+
+  while((c = getopt(argc, argv, "c:l:nv:h")) != -1)
   {
     switch(c)
     {
       case 'c': cfgFileName = optarg; break;
+      case 'l': logFileName = optarg; break;
+      case 'v':
+        v = static_cast<loguru::NamedVerbosity>(atoi(optarg));
+        break;
       case 'n': doFork = false; break;
       case 'h': showHelp = true; break;
 
@@ -836,21 +829,34 @@ int main(int argc, char **argv)
   if(showHelp)
   {
     cout
-      << "Usage: " << argv[0] << " [-nvh] [-c configFile]" << endl
+      << "Usage: " << argv[0]
+      << " [-nh] [-v N] [-c configFile] [-l logfile]" << endl
       << "\t-n\t\tno fork, process remains in foreground" << endl
       << "\t-v\t\verbosity level (-9 fatal -> 0 info -> 9 all)" << endl
       << "\t-h\t\tshow this help" << endl
-      << "\t-c\t\tconfig file to use (by default MediaArchiver.cfg if used in local folder"
+      << "\t-c\t\tconfig file to use, by default MediaArchiver.cfg is used in local folder"
+      << endl
+      << "\t-l\t\tlog output file, by default /var/log/MediaArchiver.log"
       << endl;
     return -1;
   }
+
+  loguru::g_internal_verbosity = 1;
+  loguru::SignalOptions sigOpts;
+  loguru::Options opts;
+
+  sigOpts.sigint = false;
+  opts.signals = sigOpts;
+  loguru::init(argc, argv, opts);
+  loguru::add_file(logFileName.c_str(), loguru::FileMode::Append, v);
 
   MediaArchiver::MediaArchiverConfig<MediaArchiver::DaemonConfig> mac(gCfg);
   auto readCfg = mac.read(cfgFileName);
 
   if(!readCfg)
   {
-    std::cerr << "Could not read config file" << errno << std::endl;
+    LOG_F(ERROR, "Could not read config file '%s': %i", cfgFileName.c_str(),
+      errno);
     return 1;
   }
 
@@ -866,15 +872,15 @@ int main(int argc, char **argv)
 
   if(folders.size() < 1)
   {
-    LOG_F(FATAL, "Missing media folder(s)");
+    LOG_F(ERROR, "Missing media folder(s)");
     return 1;
   }
 
-  if(false && doFork)
+  if(doFork)
   {
     switch(fork())
     {
-      case -1: LOG_F(FATAL, "Could not fork: %i", errno); return 2;
+      case -1: LOG_F(ERROR, "Could not fork: %i", errno); return 2;
       case 0: break;
       default: return 0;
     }
