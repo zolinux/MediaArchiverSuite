@@ -1,13 +1,11 @@
 cmake_minimum_required(VERSION 3.10.0)
 
 LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
-#set(CMAKE_SYSTEM_NAME Linux)
 
-#add_compile_options(-march=1004kc)
 project(MediaArchiverClient VERSION 0.0.1 LANGUAGES C CXX) 
 
 find_package(Threads REQUIRED)
-find_package(SQLite3 REQUIRED)
+#find_package(SQLite3 REQUIRED)
 
 enable_testing()
 if(WIN32)
@@ -106,7 +104,7 @@ PUBLIC ${SQLITE3_LIBRARIES}
 target_include_directories(sqlite  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 
 target_link_libraries(MediaArchiverDaemon 
-    PRIVATE MediaArchiverCommon Threads::Threads sqlite filesystemwatcher Loguru sqlite3
+    PRIVATE MediaArchiverCommon Threads::Threads pthread sqlite filesystemwatcher Loguru sqlite3
 )
 # target_include_directories(MediaArchiverDaemon INTERFACE
 #     $<BUILD_INTERFACE:rpc>
