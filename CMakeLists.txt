@@ -17,6 +17,7 @@ endif()
 set(CMAKE_CXX_STANDARD 14)
 add_subdirectory(rpclib)
 add_subdirectory(tests)
+add_subdirectory(sqlite)
 
 add_library(Loguru STATIC 
     ${CMAKE_CURRENT_LIST_DIR}/loguru/loguru.cpp
@@ -105,7 +106,7 @@ PUBLIC ${SQLITE3_LIBRARIES}
 target_include_directories(sqlite  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 
 target_link_libraries(MediaArchiverDaemon 
-    PRIVATE MediaArchiverCommon Threads::Threads sqlite filesystemwatcher Loguru
+    PRIVATE MediaArchiverCommon Threads::Threads sqlite filesystemwatcher Loguru sqlite3
 )
 # target_include_directories(MediaArchiverDaemon INTERFACE
 #     $<BUILD_INTERFACE:rpc>
