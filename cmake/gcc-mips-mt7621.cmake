@@ -10,16 +10,20 @@ set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 
 set(CMAKE_EXECUTABLE_SUFFIX "")
 
-string(APPEND
+set(
+  CMAKE_EXE_LINKER_FLAGS_INIT
+  " -Wl,--gc-sections,--print-memory-usage -Wl,-rpath=sysroot/libsubdir:${ROOTFS_DIR} -Wl,--dynamic-linker=sysroot/libsubdir/lib/ld-uClibc.so.0"
+)
+set(
   CMAKE_EXE_LINKER_FLAGS
-  " -Wl,--gc-sections,--print-memory-usage"
+  ${CMAKE_EXE_LINKER_FLAGS_INIT}
 )
 
 set(CMAKE_EXE_LINKER_FLAGS_RELEASE " -Wl,--strip-all")
 set(CMAKE_EXE_LINKER_FLAGS_MINSIZEREL " -Wl,--strip-all")
 
 macro(__platform_generic_gnu lang)
-  string(APPEND CMAKE_${lang}_FLAGS_INIT
+  string(APPEND CMAKE_${lang}_FLAGS
     " -march=${CMAKE_SYSTEM_PROCESSOR} -muclibc")
 
   # string(APPEND
@@ -32,7 +36,7 @@ macro(__platform_generic_gnu lang)
   )
   string(APPEND
     CMAKE_${lang}_FLAGS
-    " -Wl,--warn-common -Wl,-rpath=sysroot/libsubdir:${ROOTFS_DIR} -Wl,--dynamic-linker=sysroot/libsubdir/lib/ld-uClibc.so.0"
+    " -Wl,--warn-common"
   )
 
   string(APPEND CMAKE_${lang}_FLAGS_DEBUG " -DDEBUG -O0 -ggdb3")
