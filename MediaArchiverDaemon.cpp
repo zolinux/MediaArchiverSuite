@@ -853,14 +853,7 @@ int main(int argc, char **argv)
 
   try
   {
-    auto readCfg = mac.read(cfgFileName);
-
-    if(!readCfg)
-    {
-      stringstream ss;
-      ss << "Could not read config file " << cfgFileName << ": " << errno;
-      throw runtime_error(ss.str());
-    }
+    mac.read(cfgFileName);
   }
   catch(const std::exception &e)
   {

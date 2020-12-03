@@ -57,15 +57,23 @@ int main(int argc, char **argv)
   loguru::init(argc, argv,
     loguru::Options{.main_thread_name = "mainThread",
       .signals = {.sigint = false}});
-      
+
   loguru::add_file(
     "client.log", loguru::FileMode::Append, loguru::Verbosity_MAX);
-    
+
   // load configuration
   {
     auto mac =
       MediaArchiver::MediaArchiverConfig<MediaArchiver::ClientConfig>(gCfg);
-    auto b = mac.read("MediaArchiver.cfg");
+    try
+    {
+      mac.read("MediaArchiver.cfg");
+    }
+    catch(const std::exception &e)
+    {
+      LOG_F(ERROR, e.what());
+      return 1;
+    }
   }
 
   // Register signal and signal handler

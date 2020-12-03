@@ -42,9 +42,8 @@ public:
   {
   }
 
-  bool read(const std::string &file)
+  void read(const std::string &file)
   {
-    bool readData = false;
     auto fs = std::ifstream(file);
     try
     {
@@ -86,7 +85,6 @@ public:
         auto value = line.substr(iSep + 1);
         trim(value);
 
-        readData = true;
         if(!parse(key, value, m_config))
         {
           std::cerr << "Error: ignored unrecognized configuration: " << key
@@ -105,7 +103,6 @@ public:
     }
     if(fs.is_open())
       fs.close();
-    return readData;
   }
 
 private:
