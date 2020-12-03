@@ -5,7 +5,9 @@ LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 project(MediaArchiverClient VERSION 0.0.1 LANGUAGES C CXX) 
 
 find_package(Threads REQUIRED)
-#find_package(SQLite3 REQUIRED)
+find_package(SQLite3 QUIET)
+
+set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 enable_testing()
 if(WIN32)
@@ -15,13 +17,19 @@ endif()
 set(CMAKE_CXX_STANDARD 14)
 add_subdirectory(rpclib)
 add_subdirectory(tests)
-add_subdirectory(sqlite)
 
-add_library(Loguru STATIC 
+# FixMe:
+# on the router there is the sqlite3.so but no header files, therefore it
+# will be compiled but the .so ignored
+if(NOT $<BOOL:${SQLITE3_INCLUDE_DIR}>)
+    add_subdirectory(sqlite)
+endif()
+
+add_library(Loguru SHARED 
     ${CMAKE_CURRENT_LIST_DIR}/loguru/loguru.cpp
     ${CMAKE_CURRENT_LIST_DIR}/loguru/loguru.hpp
 )
-
+target_compile_definitions(Loguru PRIVATE LOGURU_STACKTRACES=0)
 target_include_directories(Loguru PUBLIC ${CMAKE_CURRENT_LIST_DIR}/loguru)
 target_link_libraries(Loguru PUBLIC dl)
 
@@ -95,11 +103,7 @@ add_library(sqlite OBJECT
 )
 
 target_link_libraries(sqlite 
-PUBLIC Threads::Threads rpc Loguru)
-
-target_link_libraries(sqlite 
-PUBLIC ${SQLITE3_LIBRARIES}
-)
+PUBLIC ${SQLITE3_LIBRARIES} Threads::Threads rpc Loguru)
 
 target_include_directories(sqlite  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 
