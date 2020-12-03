@@ -96,6 +96,12 @@ public:
     }
     catch(std::exception &ex)
     {
+      if(fs.is_open())
+        fs.close();
+
+      std::stringstream ss;
+      ss << "file " << file << " couldn't be processes: " << ex.what();
+      throw std::runtime_error(ss.str());
     }
     if(fs.is_open())
       fs.close();

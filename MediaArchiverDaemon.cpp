@@ -320,7 +320,6 @@ template<>
 bool MediaArchiverConfig<DaemonConfig>::parse(
   const std::string &key, const std::string &value, DaemonConfig &config)
 {
-  std::locale::global(std::locale("en_US.utf8"));
   auto k = key;
   auto &f = std::use_facet<std::ctype<char>>(std::locale());
   f.tolower(&k[0], &k[0] + k.size());
@@ -831,12 +830,12 @@ int main(int argc, char **argv)
     cout
       << "Usage: " << argv[0]
       << " [-nh] [-v N] [-c configFile] [-l logfile]" << endl
-      << "\t-n\t\tno fork, process remains in foreground" << endl
-      << "\t-v\t\verbosity level (-9 fatal -> 0 info -> 9 all)" << endl
-      << "\t-h\t\tshow this help" << endl
-      << "\t-c\t\tconfig file to use, by default MediaArchiver.cfg is used in local folder"
+      << "\t-n\tno fork, process remains in foreground" << endl
+      << "\t-v\tverbosity level (-9 fatal -> 0 info -> 9 all)" << endl
+      << "\t-h\tshow this help" << endl
+      << "\t-c\tconfig file to use, by default MediaArchiver.cfg is used in local folder"
       << endl
-      << "\t-l\t\tlog output file, by default /var/log/MediaArchiver.log"
+      << "\t-l\tlog output file, by default /var/log/MediaArchiver.log"
       << endl;
     return -1;
   }
@@ -851,12 +850,21 @@ int main(int argc, char **argv)
   loguru::add_file(logFileName.c_str(), loguru::FileMode::Append, v);
 
   MediaArchiver::MediaArchiverConfig<MediaArchiver::DaemonConfig> mac(gCfg);
-  auto readCfg = mac.read(cfgFileName);
 
-  if(!readCfg)
+  try
   {
-    LOG_F(ERROR, "Could not read config file '%s': %i", cfgFileName.c_str(),
-      errno);
+    auto readCfg = mac.read(cfgFileName);
+
+    if(!readCfg)
+    {
+      stringstream ss;
+      ss << "Could not read config file " << cfgFileName << ": " << errno;
+      throw runtime_error(ss.str());
+    }
+  }
+  catch(const std::exception &e)
+  {
+    LOG_F(ERROR, e.what());
     return 1;
   }
 
@@ -868,7 +876,10 @@ int main(int argc, char **argv)
   std::istringstream iss(gCfg.foldersToWatch);
 
   for(std::string buf; std::getline(iss, buf, pathSeparator);)
-  { folders.emplace_back(move(buf)); }
+  {
+    LOG_F(2, "Watching folder '%s'", buf.c_str());
+    folders.emplace_back(move(buf));
+  }
 
   if(folders.size() < 1)
   {

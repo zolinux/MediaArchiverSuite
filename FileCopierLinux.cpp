@@ -35,7 +35,18 @@ void FileCopierLinux::copyFile(
 
   posix_fadvise(s, 0, 0, POSIX_FADV_SEQUENTIAL);
 
-  int d = open(dst, O_WRONLY | O_CREAT | O_TRUNC);
+  if(mtime)
+  {
+    ts[0] = *mtime;
+    ts[1] = *mtime;
+  }
+  else
+  {
+    ts[0] = finfo.st_atim;
+    ts[1] = finfo.st_mtim;
+  }
+  
+  int d = open(dst, O_WRONLY | O_CREAT | O_TRUNC, &ts[0]);
   posix_fallocate(d, 0, fsize);
 
   char buf[8192];
@@ -55,16 +66,6 @@ void FileCopierLinux::copyFile(
   }
 
   close(d);
-  if(mtime)
-  {
-    ts[0] = *mtime;
-    ts[1] = *mtime;
-  }
-  else
-  {
-    ts[0] = finfo.st_atim;
-    ts[1] = finfo.st_mtim;
-  }
 
   futimens(d, ts);
   close(s);

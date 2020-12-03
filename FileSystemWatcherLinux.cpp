@@ -6,6 +6,7 @@
 #include <dirent.h>
 #include <stdexcept>
 #include <sys/eventfd.h>
+#include <sys/select.h>
 #include <vector>
 
 #include "FileSystemWatcherLinux.hpp"
