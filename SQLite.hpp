@@ -104,11 +104,11 @@ public:
     m_ss << std::to_string(i);
     return *this;
   }
-  // ExecSQL &operator<<(size_t i)
-  // {
-  //   m_ss << std::to_string(i);
-  //   return *this;
-  // }
+  ExecSQL &operator<<(const unsigned long i)
+  {
+    m_ss << std::to_string(i);
+    return *this;
+  }
   ExecSQL &operator<<(std::_Put_time<char> i)
   {
     m_ss << "'" << i << "'";
