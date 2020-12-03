@@ -66,7 +66,7 @@ TEST_CASE("ffmpeg [pass]", "[ffmpeg]")
 {
   ClientConfig cfg;
   auto mac = MediaArchiverConfig<ClientConfig>(cfg);
-  auto b = mac.read("../MediaArchiver.cfg");
+  REQUIRE_NOTHROW(mac.read("../MediaArchiver.cfg"));
   REQUIRE_FALSE(cfg.pathToEncoder.empty());
   REQUIRE_FALSE(cfg.pathToProbe.empty());
 

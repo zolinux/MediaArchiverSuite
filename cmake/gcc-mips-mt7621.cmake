@@ -12,7 +12,7 @@ set(CMAKE_EXECUTABLE_SUFFIX "")
 
 set(
   CMAKE_EXE_LINKER_FLAGS_INIT
-  " -Wl,--gc-sections,--print-memory-usage -Wl,-rpath=sysroot/libsubdir:${ROOTFS_DIR} -Wl,--dynamic-linker=sysroot/libsubdir/lib/ld-uClibc.so.0"
+  " --sysroot=${ROOTFS_DIR} -Wl,--gc-sections,--print-memory-usage -Wl,-rpath=/lib -Wl,--dynamic-linker=/lib/ld-musl-mipsel.so.1"
 )
 set(
   CMAKE_EXE_LINKER_FLAGS
@@ -24,15 +24,11 @@ set(CMAKE_EXE_LINKER_FLAGS_MINSIZEREL " -Wl,--strip-all")
 
 macro(__platform_generic_gnu lang)
   string(APPEND CMAKE_${lang}_FLAGS
-    " -march=${CMAKE_SYSTEM_PROCESSOR} -muclibc")
+    " -march=${CMAKE_SYSTEM_PROCESSOR} -mmusl -fPIC")
 
-  # string(APPEND
-  #   CMAKE_${lang}_FLAGS_INIT
-  #   " -Wall -Wextra -pedantic -Werror"
-  # )
   string(APPEND
     CMAKE_${lang}_FLAGS
-    " -ffunction-sections -fdata-sections -fno-strict-aliasing -fno-common"
+    " -ffunction-sections -fdata-sections -fno-strict-aliasing -fno-common -Wno-unused-result"
   )
   string(APPEND
     CMAKE_${lang}_FLAGS
@@ -48,8 +44,10 @@ macro(__platform_generic_gnu lang)
   set(CMAKE_${lang}_OUTPUT_EXTENSION_REPLACE 1)
 endmacro()
 
-SET(CMAKE_FIND_ROOT_PATH ${ROOTFS_DIR})
-SET(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_SKIP_RPATH TRUE)
+SET(CMAKE_FIND_ROOT_PATH /home/zoli/work/openwrt-sdk-19.07.4-ramips-mt7621_gcc-7.5.0_musl.Linux-x86_64/staging_dir/target-mipsel_24kc_musl/usr;/home/zoli/work/openwrt-sdk-19.07.4-ramips-mt7621_gcc-7.5.0_musl.Linux-x86_64/staging_dir/toolchain-mipsel_24kc_gcc-7.5.0_musl)
+
+SET(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM BOTH)
 SET(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 SET(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 

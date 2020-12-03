@@ -1,5 +1,3 @@
-cmake_minimum_required(VERSION 3.10.0)
-
 add_executable(test_sqlite
     test_sqlite.cpp
 )
@@ -7,7 +5,7 @@ add_executable(test_sqlite
 target_compile_definitions(test_sqlite PRIVATE NORPC)
 
 target_include_directories(test_sqlite PRIVATE ${CMAKE_CURRENT_LIST_DIR})
-target_link_libraries(test_sqlite PUBLIC sqlite)
+target_link_libraries(test_sqlite PUBLIC sqlite Threads::Threads)
 
 add_executable(test_inotify
     test_inotify.cpp
