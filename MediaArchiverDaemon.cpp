@@ -357,6 +357,10 @@ bool MediaArchiverConfig<DaemonConfig>::parse(
   {
     config.resultFileSuffix = value;
   }
+  else if(k == "logfile")
+  {
+    config.logFile = value;
+  }
   else if(k == "verbosity")
   {
     config.verbosity = atoi(value.c_str());
@@ -803,7 +807,7 @@ ConnectedClient &MediaArchiverDaemon::checkClient()
 int main(int argc, char **argv)
 {
   std::string cfgFileName = "MediaArchiver.cfg";
-  std::string logFileName = "/var/log/MediaArchiver.log";
+  std::string logFile;
   int c;
   auto v = loguru::Verbosity_INFO;
   bool showHelp = false;
@@ -814,7 +818,7 @@ int main(int argc, char **argv)
     switch(c)
     {
       case 'c': cfgFileName = optarg; break;
-      case 'l': logFileName = optarg; break;
+      case 'l': logFile = optarg; break;
       case 'v':
         v = static_cast<loguru::NamedVerbosity>(atoi(optarg));
         break;
@@ -835,7 +839,7 @@ int main(int argc, char **argv)
       << "\t-h\tshow this help" << endl
       << "\t-c\tconfig file to use, by default MediaArchiver.cfg is used in local folder"
       << endl
-      << "\t-l\tlog output file, by default /var/log/MediaArchiver.log"
+      << "\t-l\tlog output file, override config file value"
       << endl;
     return -1;
   }
@@ -847,7 +851,6 @@ int main(int argc, char **argv)
   sigOpts.sigint = false;
   opts.signals = sigOpts;
   loguru::init(argc, argv, opts);
-  loguru::add_file(logFileName.c_str(), loguru::FileMode::Append, v);
 
   MediaArchiver::MediaArchiverConfig<MediaArchiver::DaemonConfig> mac(gCfg);
 
@@ -859,6 +862,22 @@ int main(int argc, char **argv)
   {
     LOG_F(ERROR, e.what());
     return 1;
+  }
+
+  // override value from config file
+  if(logFile.empty())
+  {
+    logFile = gCfg.logFile;
+  }
+
+  if(!logFile.empty())
+  {
+    if(!loguru::add_file(logFile.c_str(), loguru::FileMode::Append, v))
+    {
+      LOG_F(
+        ERROR, "Cannot open logfile '%s' to write", logFile.c_str());
+      return 1;
+    }
   }
 
   std::list<std::string> folders;

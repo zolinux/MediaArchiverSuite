@@ -21,6 +21,7 @@ struct DaemonConfig
   std::string finalExtension;
   std::string dbPath;
   std::string resultFileSuffix;
+  std::string logFile;
 };
 }
 
