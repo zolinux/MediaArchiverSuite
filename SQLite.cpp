@@ -224,14 +224,14 @@ uint32_t SQLite::addFile(
     SQL
       << cb
       << "select sourcefiles.id,queue.status,archives.path from sourcefiles left join queue using (id) left join archives using(id) where sourcefiles.path='"
-      << src->fileName << "'";
+      << ExecSQL::escape(src->fileName) << "'";
 
     if(!srcId)
     {
       // put file into sources
 
-      SQL << "INSERT INTO sourcefiles (path,size) VALUES('" << src->fileName
-          << "'," << src->fileSize << ")";
+      SQL << "INSERT INTO sourcefiles (path,size) VALUES('"
+          << ExecSQL::escape(src->fileName) << "'," << src->fileSize << ")";
 
       srcId = sqlite3_last_insert_rowid(m_db);
     }
@@ -280,7 +280,7 @@ uint32_t SQLite::addFile(
     SQL
       << cb
       << "select archives.id,queue.status from archives left join queue using (id) where archives.path='"
-      << dst->fileName << "'";
+      << ExecSQL::escape(dst->fileName) << "'";
 
     if(!archiveName.empty() && srcId != srcId2)
     {
@@ -296,7 +296,8 @@ uint32_t SQLite::addFile(
       {
         // add to archives an archives
         SQL << "INSERT INTO archives (id,path) VALUES (" << srcId << ",'"
-            << dst->fileName << "') on conflict do nothing;";
+            << ExecSQL::escape(dst->fileName)
+            << "') on conflict do nothing;";
       }
 
       if(!inQueue)
@@ -324,7 +325,6 @@ void SQLite::addEncodedFile(const EncodedFile &file)
   if(!file.error.empty())
     comment = string("'") + ExecSQL::escape(file.error) + "'";
 
-
   SQL << "update queue set status=" << file.result
       << ",start=" << ExecSQL::now << ",comment=" << comment
       << " where id=" << file.originalFileId;
@@ -332,7 +332,8 @@ void SQLite::addEncodedFile(const EncodedFile &file)
   if(file.fileLength > 0)
   {
     SQL << "INSERT INTO archives (id,path) VALUES (" << file.originalFileId
-        << ",'" << file.fileName << "') on conflict do nothing";
+        << ",'" << ExecSQL::escape(file.fileName)
+        << "') on conflict do nothing";
   }
 }
 
