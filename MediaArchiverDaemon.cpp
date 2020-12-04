@@ -215,24 +215,24 @@ MediaArchiverDaemon::MediaArchiverDaemon(
 
   m_srv.bind(RpcFunctions::getVersion, []() -> uint32_t {
     auto id = rpc::this_session().id();
-    LOG_F(INFO, "getVersion requested (%lX)", id);
+    LOG_F(INFO, "getVersion requested (%X)", id);
     return 1;
   });
 
   m_srv.bind(RpcFunctions::authenticate, [&](const string &token) -> void {
-    LOG_F(INFO, "Auth requested (%lX): %s", rpc::this_session().id(),
+    LOG_F(INFO, "Auth requested (%X): %s", rpc::this_session().id(),
       token.c_str());
     this->authenticate(token);
   });
 
   m_srv.bind(RpcFunctions::reset, [&]() -> void {
-    LOG_F(INFO, "Reset transmission requested (%lX)s",
+    LOG_F(INFO, "Reset transmission requested (%X)s",
       rpc::this_session().id());
     this->reset();
   });
 
   m_srv.bind(RpcFunctions::abort, [&]() -> void {
-    LOG_F(INFO, "Abort requested (%lX)", rpc::this_session().id());
+    LOG_F(INFO, "Abort requested (%X)", rpc::this_session().id());
     this->abort();
   });
 
@@ -288,7 +288,7 @@ MediaArchiverDaemon::MediaArchiverDaemon(
     catch(const std::exception &e)
     {
       LOG_F(
-        ERROR, "WriteChunk (%lX): %s", rpc::this_session().id(), e.what());
+        ERROR, "WriteChunk (%X): %s", rpc::this_session().id(), e.what());
       rpc::this_handler().respond_error(
         std::string("I/O error") + e.what());
     }
@@ -305,7 +305,7 @@ MediaArchiverDaemon::MediaArchiverDaemon(
     catch(const std::exception &e)
     {
       LOG_F(
-        ERROR, "ReadChunk (%lX): %s", rpc::this_session().id(), e.what());
+        ERROR, "ReadChunk (%X): %s", rpc::this_session().id(), e.what());
       rpc::this_handler().respond_error(
         std::string("I/O error:") + e.what());
     }
