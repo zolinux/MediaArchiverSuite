@@ -226,8 +226,8 @@ MediaArchiverDaemon::MediaArchiverDaemon(
   });
 
   m_srv.bind(RpcFunctions::reset, [&]() -> void {
-    LOG_F(INFO, "Reset transmission requested (%X)s",
-      rpc::this_session().id());
+    LOG_F(
+      INFO, "Reset transmission requested (%X)s", rpc::this_session().id());
     this->reset();
   });
 
@@ -810,6 +810,7 @@ int main(int argc, char **argv)
   std::string logFile;
   int c;
   auto v = loguru::Verbosity_INFO;
+  bool verbosityOverridden = false;
   bool showHelp = false;
   bool doFork = true;
 
@@ -820,6 +821,7 @@ int main(int argc, char **argv)
       case 'c': cfgFileName = optarg; break;
       case 'l': logFile = optarg; break;
       case 'v':
+        verbosityOverridden = true;
         v = static_cast<loguru::NamedVerbosity>(atoi(optarg));
         break;
       case 'n': doFork = false; break;
@@ -839,8 +841,7 @@ int main(int argc, char **argv)
       << "\t-h\tshow this help" << endl
       << "\t-c\tconfig file to use, by default MediaArchiver.cfg is used in local folder"
       << endl
-      << "\t-l\tlog output file, override config file value"
-      << endl;
+      << "\t-l\tlog output file, override config file value" << endl;
     return -1;
   }
 
@@ -870,12 +871,16 @@ int main(int argc, char **argv)
     logFile = gCfg.logFile;
   }
 
+  if(!verbosityOverridden)
+  {
+    v = static_cast<loguru::NamedVerbosity>(gCfg.verbosity);
+  }
+
   if(!logFile.empty())
   {
     if(!loguru::add_file(logFile.c_str(), loguru::FileMode::Append, v))
     {
-      LOG_F(
-        ERROR, "Cannot open logfile '%s' to write", logFile.c_str());
+      LOG_F(ERROR, "Cannot open logfile '%s' to write", logFile.c_str());
       return 1;
     }
   }
