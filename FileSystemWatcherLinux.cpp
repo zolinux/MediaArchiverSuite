@@ -1,5 +1,7 @@
 
 #include <iostream>
+#include <istream>
+#include <sstream>
 #include <sys/inotify.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -8,8 +10,14 @@
 #include <sys/eventfd.h>
 #include <sys/select.h>
 #include <vector>
+#include <string.h>
 
 #include "FileSystemWatcherLinux.hpp"
+
+namespace
+{
+const std::string DirWatchRegexPrefix = "regex*";
+}
 
 namespace MediaArchiver
 {
@@ -40,11 +48,63 @@ FileSystemWatcherLinux::FileSystemWatcherLinux(
   {
     // due to discovering all files, this function takes long time
     // it would be better to do it in thread
-    watchDir(folder);
-    if(m_stopping)
-      return;
-  }
+    if(!folder.compare(
+         0, ::DirWatchRegexPrefix.length(), ::DirWatchRegexPrefix))
+    {
+      auto argument = folder.substr(DirWatchRegexPrefix.length());
+      auto separator = argument.find('*');
+      if(separator == std::string::npos)
+      {
+        throw std::runtime_error(
+          std::string("regex format invalid: ") + argument);
+      }
 
+      auto startFolder = argument.substr(0, separator);
+      auto re = argument.substr(separator + 1);
+
+      std::stringstream ss;
+      ss << "/usr/bin/find " << startFolder << " -type d -iregex '" << re
+         << "'";
+      std::string command = ss.str();
+      std::unique_ptr<FILE> f(popen(command.c_str(), "r"));
+      if(!f)
+      {
+        throw std::runtime_error(
+          "Cannot execute command to find the folders");
+      }
+
+      char *line = NULL;
+      size_t len = 0;
+      try
+      {
+        while((getline(&line, &len, f.get())) != -1)
+        {
+          line[strlen(line) - 1] = 0; // trim line
+          watchDir(line);
+        }
+
+        if(line)
+          free(line);
+      }
+      catch(const std::exception &e)
+      {
+        if(line)
+          free(line);
+
+        pclose(f.release());
+        throw;
+      }
+
+      pclose(f.release());
+
+      if(m_stopping)
+        return;
+    }
+    else
+    {
+      watchDir(folder);
+    }
+  }
   start();
 }
 
@@ -156,17 +216,6 @@ void FileSystemWatcherLinux::stop()
     m_eventfd = -1;
   }
 }
-// IFileSystemChangeListener::EventType
-// FileSystemWatcherLinux::handleInodeEvent(uint32_t mask) const noexcept
-// {
-//   switch(mask)
-//   {
-//     case: return IFileSystemChangeListener::EventType::Created; break;
-
-//     default: break;
-//   }
-//   return IFileSystemChangeListener::EventType::Unknown;
-// }
 
 void FileSystemWatcherLinux::handleInotifyEvent(
   const struct inotify_event *e)
