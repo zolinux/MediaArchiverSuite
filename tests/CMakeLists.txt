@@ -27,12 +27,13 @@ add_executable(test_client
    )
 
 target_include_directories(test_client PRIVATE ${CMAKE_CURRENT_LIST_DIR})
-target_link_libraries(test_client PUBLIC rpc MediaArchiverCommon MediaArchiverClient Threads::Threads)
+target_link_libraries(test_client PUBLIC MediaArchiverCommon MediaArchiverClient Threads::Threads)
 
 add_executable(test_hello
     test_hello.cpp
     )
    
+# Tests shall be run from the build folder
 add_test(tests
     test_sqlite
     test_inotify
@@ -40,4 +41,3 @@ add_test(tests
     test_client
     test_hello
 )
-

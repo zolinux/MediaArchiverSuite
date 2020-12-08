@@ -71,7 +71,7 @@ TEST_CASE("ffmpeg [pass]", "[ffmpeg]")
   REQUIRE_FALSE(cfg.pathToProbe.empty());
 
   TestClient tc(cfg);
-  const string srcName("../../test.avi");
+  const string srcName("../test.avi");
 
   SECTION("FFPROBE") { tc.testFfprobe(srcName); }
   SECTION("ENCODING") { tc.testEncoding(srcName); }
