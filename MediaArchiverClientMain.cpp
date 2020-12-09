@@ -54,10 +54,10 @@ void signal_callback_handler(int signum)
 int main(int argc, char **argv)
 {
   loguru::g_internal_verbosity = 1;
-  loguru::init(argc, argv,
-    loguru::Options{.main_thread_name = "mainThread",
-      .signals = {.sigint = false}});
+  loguru::Options opts;
+  opts.signals.sigint = false;
 
+  loguru::init(argc, argv, opts);
   loguru::add_file(
     "client.log", loguru::FileMode::Append, loguru::Verbosity_MAX);
 

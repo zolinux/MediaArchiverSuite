@@ -239,7 +239,7 @@ void MediaArchiverClient::doIdle()
 
   if(!errStr.empty())
   {
-    //m_authenticated = false;
+    // m_authenticated = false;
     LOG_F(ERROR, "doIdle: %s", errStr.c_str());
   }
 
@@ -455,9 +455,22 @@ void MediaArchiverClient::doConvert()
       }
       catch(std::exception &e)
       {
+        m_stdOut << buffer.data();
+        m_encResult.error = m_stdOut.str();
+        m_encResult.result =
+          EncodingResultInfo::EncodingResult::UnknownError;
         LOG_F(ERROR, "doConvert: %s", e.what());
       }
     }
+    else
+    {
+      m_stdOut << buffer.data();
+      m_encResult.error = m_stdOut.str();
+      m_encResult.result = EncodingResultInfo::EncodingResult::UnknownError;
+      LOG_F(
+        ERROR, "doConvert: Encoding failed: %s", m_encResult.error.c_str());
+    }
+
     m_mainState = MainStates::SendResult;
   }
   else
