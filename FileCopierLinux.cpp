@@ -45,7 +45,7 @@ void FileCopierLinux::copyFile(
     ts[0] = finfo.st_atim;
     ts[1] = finfo.st_mtim;
   }
-  
+
   int d = open(dst, O_WRONLY | O_CREAT | O_TRUNC, &ts[0]);
   posix_fallocate(d, 0, fsize);
 
@@ -75,7 +75,7 @@ void FileCopierLinux::moveFile(
   const char *src, const char *dst, const timespec *const mtime)
 {
   std::stringstream ss;
-  ss << "mv \"" << src << "\" \"" << dst << "\"";
+  ss << "/usr/bin/mv \"" << src << "\" \"" << dst << "\"";
 
   int i = system(ss.str().c_str());
   if(i)

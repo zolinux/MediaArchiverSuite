@@ -266,7 +266,8 @@ MediaArchiverDaemon::MediaArchiverDaemon(
 
   m_srv.bind(
     RpcFunctions::postFile, [&](const EncodingResultInfo &result) -> void {
-      LOG_F(3, "postFile");
+      LOG_F(3, "postFile: %i, %luBytes, %s", result.result,
+        result.fileLength, result.error.c_str());
       try
       {
         this->postFile(result);
@@ -680,7 +681,7 @@ void MediaArchiverDaemon::postFile(const EncodingResultInfo &result)
 
   if(cli.outFile.is_open())
   {
-    throw std::runtime_error("Invalid state");
+    throw std::runtime_error("Output file is still open");
   }
 
   cli.encResult = result;
@@ -725,9 +726,15 @@ bool MediaArchiverDaemon::writeChunk(const std::vector<char> &data)
 {
   auto &cli = checkClient();
   if(!cli.originalFileId || !cli.outFile.is_open() ||
-    !cli.encResult.fileLength)
+    !cli.encResult.fileLength ||
+    cli.outFile.tellp() >= cli.encResult.fileLength)
   {
-    throw std::runtime_error("invalid state");
+    LOG_F(ERROR,
+      "writeChunk: state: id=%u, outFile=%s, resultLength=%lu, overrun=%i",
+      cli.originalFileId, cli.outFile.is_open() ? "OPEN" : "CLOSED",
+      cli.encResult.fileLength,
+      cli.outFile.tellp() >= cli.encResult.fileLength);
+    throw std::runtime_error("writeChunk: invalid state");
   }
 
   cli.outFile.write(data.data(), data.size());
@@ -779,6 +786,9 @@ void MediaArchiverDaemon::prepareNewSession(ConnectedClient &cli)
       .atime = cli.times[0],
       .mtime = cli.times[1]});
 
+  LOG_F(2, "prepare session after #%u %s", cli.originalFileId,
+    cli.encResult == EncodedFile::EncodingResult::OK ? "SUCCEEDED" :
+                                                       "FAILED");
   // preparing the next file transfer
   cli.originalFileId = 0;
   cli.tempFileName = "";
@@ -787,6 +797,7 @@ void MediaArchiverDaemon::prepareNewSession(ConnectedClient &cli)
   cli.encResult = EncodingResultInfo();
   cli.inFile = ifstream();
   cli.outFile = ofstream();
+  memset(cli.times, 0, sizeof(cli.times));
 }
 
 ConnectedClient &MediaArchiverDaemon::checkClient()
