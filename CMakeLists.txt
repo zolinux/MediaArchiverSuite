@@ -12,6 +12,12 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 enable_testing()
 if(WIN32)
     add_compile_definitions( _WIN32_WINNT=0x0601)
+    # find_package(dlfcn-win32 REQUIRED)
+    set(CMAKE_DL_LIBS )
+    # set(CMAKE_DL_LIBS dlfcn-win32::dl)
+    add_compile_options( -mwindows)
+elseif(LINUX)
+    set(CMAKE_DL_LIBS dl)
 endif()
 
 set(CMAKE_CXX_STANDARD 14)
@@ -31,7 +37,7 @@ add_library(Loguru SHARED
 )
 target_compile_definitions(Loguru PRIVATE LOGURU_STACKTRACES=0)
 target_include_directories(Loguru PUBLIC ${CMAKE_CURRENT_LIST_DIR}/loguru)
-target_link_libraries(Loguru PUBLIC dl)
+target_link_libraries(Loguru PUBLIC ${CMAKE_DL_LIBS})
 
 add_library(MediaArchiverCommon OBJECT
     RpcFunctions.hpp
