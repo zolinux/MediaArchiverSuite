@@ -58,8 +58,6 @@ int main(int argc, char **argv)
   opts.signals.sigint = false;
 
   loguru::init(argc, argv, opts);
-  loguru::add_file(
-    "client.log", loguru::FileMode::Append, loguru::Verbosity_MAX);
 
   // load configuration
   {
@@ -75,6 +73,9 @@ int main(int argc, char **argv)
       return 1;
     }
   }
+
+  loguru::add_file("MediaArchiverClient.log", loguru::FileMode::Append,
+    static_cast<loguru::Verbosity>(gCfg.verbosity));
 
   // Register signal and signal handler
   signal(SIGINT, signal_callback_handler);

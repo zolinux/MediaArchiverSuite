@@ -17,6 +17,7 @@ struct ClientConfig
   std::string pathToEncoder;
   std::string pathToProbe;
   std::string tempFolder;
+  std::string extraCommandLineOptions;
 };
 }
 

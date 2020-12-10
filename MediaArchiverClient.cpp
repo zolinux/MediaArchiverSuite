@@ -37,6 +37,7 @@ MediaArchiverClient::MediaArchiverClient(const ClientConfig &cfg)
 {
   std::random_device rd;
   std::mt19937 mt(rd());
+  mt.seed(time(nullptr));
   std::uniform_int_distribution<> dist(0, std::numeric_limits<int>::max());
   m_token = dist(mt);
 }
@@ -107,6 +108,10 @@ bool MediaArchiverConfig<ClientConfig>::parse(
   else if(k == "tempfolder")
   {
     config.tempFolder = value;
+  }
+  else if(k == "extracommandlineoptions")
+  {
+    config.extraCommandLineOptions = value;
   }
   else
   {
@@ -276,10 +281,11 @@ void MediaArchiverClient::doReceive()
       std::stringstream cmd;
       cmd << m_cfg.pathToEncoder << " -y -hide_banner -i \""
           << m_cfg.tempFolder << "/" << InTmpFileName << "."
-          << m_encSettings.fileExtension << "\" "
-          << m_encSettings.commandLineParameters << " \""
-          << m_cfg.tempFolder << "/" << OutTmpFileName
-          << m_encSettings.finalExtension << "\" 2>&1";
+          << m_encSettings.fileExtension << "\" -map_metadata -1 "
+          << m_encSettings.commandLineParameters << " "
+          << m_cfg.extraCommandLineOptions << " \"" << m_cfg.tempFolder
+          << "/" << OutTmpFileName << m_encSettings.finalExtension
+          << "\" 2>&1";
 
       launch(cmd.str());
       m_mainState = MainStates::WaitForEncodingFinished;
@@ -530,7 +536,12 @@ void MediaArchiverClient::doTransmit()
   }
   catch(const std::exception &e)
   {
+    // ToDo: in case of error client may stay in an endless loop. There
+    // should be a counter maintained to return to main state after some
+    // trials
     LOG_F(ERROR, "doTransmit: %s", e.what());
+    // after an error the transmission starts from the beginning
+    m_rpc->reset();
     m_dstFile.seekg(0, std::ios_base::beg);
   }
 }
