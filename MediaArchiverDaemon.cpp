@@ -215,32 +215,35 @@ MediaArchiverDaemon::MediaArchiverDaemon(
 
   m_srv.bind(RpcFunctions::getVersion, []() -> uint32_t {
     auto id = rpc::this_session().id();
-    LOG_F(INFO, "getVersion requested (%X)", id);
+    LOG_F(INFO, "getVersion requested (%li)", id);
     return 1;
   });
 
   m_srv.bind(RpcFunctions::authenticate, [&](const string &token) -> void {
-    LOG_F(INFO, "Auth requested (%X): %s", rpc::this_session().id(),
+    LOG_F(INFO, "Auth requested (%li): %s", rpc::this_session().id(),
       token.c_str());
     this->authenticate(token);
   });
 
   m_srv.bind(RpcFunctions::reset, [&]() -> void {
-    LOG_F(
-      INFO, "Reset transmission requested (%X)s", rpc::this_session().id());
+    LOG_F(INFO, "Reset transmission requested (%li)s",
+      rpc::this_session().id());
     this->reset();
   });
 
   m_srv.bind(RpcFunctions::abort, [&]() -> void {
-    LOG_F(INFO, "Abort requested (%X)", rpc::this_session().id());
+    LOG_F(INFO, "Abort requested (%li)", rpc::this_session().id());
     this->abort();
   });
 
   m_srv.bind(RpcFunctions::getNextFile,
     [&](const MediaFileRequirements &filter) -> MediaEncoderSettings {
-      LOG_SCOPE_F(INFO, "getNextFile");
+      LOG_SCOPE_F(2, "getNextFile");
       MediaEncoderSettings settings{.fileLength = 0};
 
+      // the loop if present to handle an event that the requested file
+      // cannot be opened for some reason. This error should not propagate
+      // to client, but simply another file should be taken.
       do
       {
         try
@@ -253,10 +256,13 @@ MediaArchiverDaemon::MediaArchiverDaemon(
         catch(const std::exception &e)
         {
           LOG_F(ERROR, "getNextFile error: %s", e.what());
-          if(!string(e.what()).compare(0, sizeof(::gNotAuthenticatedError),
-               ::gNotAuthenticatedError))
+          // if(!string(e.what()).compare(0,
+          // sizeof(::gNotAuthenticatedError),
+          //      ::gNotAuthenticatedError))
           {
             rpc::this_handler().respond_error(e.what());
+            settings.fileLength = 0;
+            break;
           }
         }
       } while(true);
@@ -289,7 +295,7 @@ MediaArchiverDaemon::MediaArchiverDaemon(
     catch(const std::exception &e)
     {
       LOG_F(
-        ERROR, "WriteChunk (%X): %s", rpc::this_session().id(), e.what());
+        ERROR, "WriteChunk (%li): %s", rpc::this_session().id(), e.what());
       rpc::this_handler().respond_error(
         std::string("I/O error") + e.what());
     }
@@ -306,7 +312,7 @@ MediaArchiverDaemon::MediaArchiverDaemon(
     catch(const std::exception &e)
     {
       LOG_F(
-        ERROR, "ReadChunk (%X): %s", rpc::this_session().id(), e.what());
+        ERROR, "ReadChunk (%li): %s", rpc::this_session().id(), e.what());
       rpc::this_handler().respond_error(
         std::string("I/O error:") + e.what());
     }
@@ -409,6 +415,14 @@ void MediaArchiverDaemon::onFileSystemChange(
 
   size_t size[2];
 
+  // set thread name if not yet done
+  static bool threadNameSet = false;
+  if(!threadNameSet)
+  {
+    threadNameSet = true;
+    loguru::set_thread_name("Watcher");
+  }
+
   LOG_F(4, "onFileSystemChange: e=%i, src=%s, dst=%s", static_cast<int>(e),
     src.c_str(), dst.c_str());
   if(!dst.empty())
@@ -488,13 +502,21 @@ void MediaArchiverDaemon::authenticate(const std::string &token)
   ConnectedClient cl;
   std::lock_guard<std::mutex> lck(m_mtxFileMove);
 
-  for(auto &conn: m_connections)
+  for(auto conn = m_connections.begin(); conn != m_connections.end();)
   {
-    if(token == conn.second.token)
+    if(token == conn->second.token)
     {
-      cl = std::move(conn.second);
-      m_connections.erase(conn.first);
-      continue;
+      if(!cl.token.empty())
+      {
+        LOG_F(ERROR,
+          "authenticate: Multiple connections with identical token!");
+      }
+      cl = std::move(conn->second);
+      conn = m_connections.erase(conn);
+    }
+    else
+    {
+      ++conn;
     }
   }
 
@@ -787,8 +809,8 @@ void MediaArchiverDaemon::prepareNewSession(ConnectedClient &cli)
       .mtime = cli.times[1]});
 
   LOG_F(2, "prepare session after #%u %s", cli.originalFileId,
-    cli.encResult == EncodedFile::EncodingResult::OK ? "SUCCEEDED" :
-                                                       "FAILED");
+    cli.encResult.result == EncodedFile::EncodingResult::OK ? "SUCCEEDED" :
+                                                              "FAILED");
   // preparing the next file transfer
   cli.originalFileId = 0;
   cli.tempFileName = "";

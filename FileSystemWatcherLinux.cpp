@@ -63,7 +63,7 @@ FileSystemWatcherLinux::FileSystemWatcherLinux(
       auto re = argument.substr(separator + 1);
 
       std::stringstream ss;
-      ss << "/usr/bin/find " << startFolder << " -type d -iregex '" << re
+      ss << "/usr/bin/find " << startFolder << " -type d -regex '" << re
          << "'";
       std::string command = ss.str();
       std::unique_ptr<FILE> f(popen(command.c_str(), "r"));
