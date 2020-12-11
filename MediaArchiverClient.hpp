@@ -69,6 +69,7 @@ protected:
   void removeTempFiles();
   void cleanUp();
   void checkCreateRpc();
+  void disconnect();
 
 public:
   MediaArchiverClient(const ClientConfig &cfg);
@@ -81,6 +82,5 @@ public:
   bool isStopRequested() const { return m_stopRequested; }
   int poll();
 };
-
 }
 #endif // !__MEDIAARCHIVERCLIENT_HPP__

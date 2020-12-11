@@ -129,6 +129,12 @@ void MediaArchiverClient::checkCreateRpc()
   }
 }
 
+void MediaArchiverClient::disconnect()
+{
+  m_rpc.reset();
+  m_authenticated = false;
+}
+
 void MediaArchiverClient::doAuth()
 {
   if(m_stopRequested)
@@ -208,7 +214,7 @@ void MediaArchiverClient::doIdle()
       }
       else
       {
-        m_rpc.reset();
+        disconnect();
         next = MainStates::WaitForFileCheck;
         m_timeToWait = m_cfg.checkForNewFileInterval;
         m_startTime = std::chrono::steady_clock::now();
@@ -250,7 +256,7 @@ void MediaArchiverClient::doIdle()
 
   if(next != m_mainState)
   {
-    LOG_F(2, "State change: %i -> %i -> %i", (int)m_prevMainState,
+    LOG_F(4, "State change: %i -> %i -> %i", (int)m_prevMainState,
       (int)m_mainState, (int)next);
     m_prevMainState = m_mainState;
     m_mainState = next;
@@ -271,18 +277,15 @@ void MediaArchiverClient::doReceive()
           "Received file size is different to one reported by server");
       }
       m_srcFile.close();
-      m_rpc.reset();
-
+      disconnect();
       m_encResult = EncodingResultInfo{
         .result = EncodingResultInfo::EncodingResult::UnknownError,
         .fileLength = 0,
         .error = m_stdOut.str()};
 
       std::stringstream cmd;
-      cmd << m_cfg.pathToEncoder << " -y -hide_banner -i \""
-          << m_cfg.tempFolder << "/" << InTmpFileName << "."
-          << m_encSettings.fileExtension
-          << "\" -copyts -map_metadata 0 -movflags use_metadata_tags "
+      cmd << m_cfg.pathToEncoder << " -i \"" << m_cfg.tempFolder << "/"
+          << InTmpFileName << "." << m_encSettings.fileExtension << "\" "
           << m_encSettings.commandLineParameters << " "
           << m_cfg.extraCommandLineOptions << " \"" << m_cfg.tempFolder
           << "/" << OutTmpFileName << m_encSettings.finalExtension
@@ -491,17 +494,25 @@ void MediaArchiverClient::doSendResult()
   try
   {
     checkCreateRpc();
-    m_rpc->postFile(m_encResult);
-    if(m_encResult.result == EncodingResultInfo::EncodingResult::OK &&
-      m_encResult.fileLength > 0)
-    {
-      m_dstFile.seekg(0, std::ios_base::beg);
-      m_mainState = MainStates::Transmitting;
+    if(!m_authenticated)
+    { // authenticate first
+      m_prevMainState = m_mainState;
+      m_mainState = MainStates::Authenticateing;
     }
     else
-    { // no success
-      cleanUp();
-      m_mainState = MainStates::Idle;
+    {
+      m_rpc->postFile(m_encResult);
+      if(m_encResult.result == EncodingResultInfo::EncodingResult::OK &&
+        m_encResult.fileLength > 0)
+      {
+        m_dstFile.seekg(0, std::ios_base::beg);
+        m_mainState = MainStates::Transmitting;
+      }
+      else
+      { // no success
+        cleanUp();
+        m_mainState = MainStates::Idle;
+      }
     }
   }
   catch(const std::exception &e)
@@ -518,8 +529,6 @@ void MediaArchiverClient::doTransmit()
 {
   try
   {
-    checkCreateRpc();
-
     DataChunk chunk(m_cfg.chunkSize);
     m_dstFile.read(chunk.data(), chunk.size());
     auto res = m_rpc->writeChunk(chunk);
@@ -594,8 +603,8 @@ void MediaArchiverClient::removeTempFiles()
   else
   {
     /* could not open directory */
-    std::cerr << "Could not open folder \"" << m_cfg.tempFolder
-              << "\" for enumerating files" << std::endl;
+    LOG_F(ERROR, "Could not open folder \"%s\" for enumerating files",
+      m_cfg.tempFolder.c_str());
   }
 #endif
 }
@@ -633,7 +642,7 @@ int MediaArchiverClient::poll()
 
   if(m_shutdown)
   {
-    if(m_rpc)
+    if(m_rpc && m_rpc->isConnected())
     {
       try
       {
@@ -643,11 +652,9 @@ int MediaArchiverClient::poll()
       {
         LOG_F(ERROR, "Error during shutting down: %s", e.what());
       }
-
-      m_rpc.reset();
     }
+    disconnect();
     cleanUp();
-    m_rpc.reset();
     return 1;
   }
 
