@@ -281,7 +281,8 @@ void MediaArchiverClient::doReceive()
       std::stringstream cmd;
       cmd << m_cfg.pathToEncoder << " -y -hide_banner -i \""
           << m_cfg.tempFolder << "/" << InTmpFileName << "."
-          << m_encSettings.fileExtension << "\" -map_metadata -1 "
+          << m_encSettings.fileExtension
+          << "\" -copyts -map_metadata 0 -movflags use_metadata_tags "
           << m_encSettings.commandLineParameters << " "
           << m_cfg.extraCommandLineOptions << " \"" << m_cfg.tempFolder
           << "/" << OutTmpFileName << m_encSettings.finalExtension
