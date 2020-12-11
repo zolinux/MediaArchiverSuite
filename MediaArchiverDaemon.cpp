@@ -220,7 +220,13 @@ MediaArchiverDaemon::MediaArchiverDaemon(
   });
 
   m_srv.bind(RpcFunctions::authenticate, [&](const string &token) -> void {
-    LOG_F(INFO, "Auth requested (%li): %s", rpc::this_session().id(),
+    // set thread name if not yet done
+    auto id = rpc::this_session().id();
+    stringstream ss;
+    ss << "RPC_" << std::hex << id;
+    loguru::set_thread_name(ss.str().c_str());
+
+    LOG_F(INFO, "Auth requested (%li, %X): %s", id, this_thread::get_id(),
       token.c_str());
     this->authenticate(token);
   });
@@ -239,7 +245,8 @@ MediaArchiverDaemon::MediaArchiverDaemon(
   m_srv.bind(RpcFunctions::getNextFile,
     [&](const MediaFileRequirements &filter) -> MediaEncoderSettings {
       LOG_SCOPE_F(2, "getNextFile");
-      MediaEncoderSettings settings{.fileLength = 0};
+      MediaEncoderSettings settings;
+      settings.fileLength = 0;
 
       // the loop if present to handle an event that the requested file
       // cannot be opened for some reason. This error should not propagate
@@ -415,14 +422,6 @@ void MediaArchiverDaemon::onFileSystemChange(
 
   size_t size[2];
 
-  // set thread name if not yet done
-  static bool threadNameSet = false;
-  if(!threadNameSet)
-  {
-    threadNameSet = true;
-    loguru::set_thread_name("Watcher");
-  }
-
   LOG_F(4, "onFileSystemChange: e=%i, src=%s, dst=%s", static_cast<int>(e),
     src.c_str(), dst.c_str());
   if(!dst.empty())
@@ -573,7 +572,6 @@ void MediaArchiverDaemon::abort()
 bool MediaArchiverDaemon::getNextFile(ConnectedClient &cli,
   const MediaFileRequirements &filter, MediaEncoderSettings &settings)
 {
-  BasicFileInfo fi;
   if(cli.inFile.is_open())
   {
     stringstream ss;
@@ -593,8 +591,14 @@ bool MediaArchiverDaemon::getNextFile(ConnectedClient &cli,
   cli.filter = filter;
   uint32_t srcId = 0;
 
+  cli.encSettings.fileLength = 0;
+  cli.originalFileName.clear();
+
   if(!m_stopRequested)
   {
+    BasicFileInfo fi;
+    fi.fileSize = 0;
+
     srcId = m_db.getNextFile(cli.filter, fi);
     if(srcId > 0)
     {
@@ -615,16 +619,11 @@ bool MediaArchiverDaemon::getNextFile(ConnectedClient &cli,
       cli.encSettings.fileLength = fi.fileSize;
       cli.originalFileName = fi.fileName;
       stringstream ss;
-      ss << "-preset veryfast -c:v " << m_cfg.vCodec << " -c:a "
-         << m_cfg.aCodec << " -crf " << m_cfg.crf << " -b:a "
-         << to_string(m_cfg.aBitRate);
+      ss << "-y -hide_banner -copyts -map_metadata 0 -movflags use_metadata_tags -preset veryfast -c:v "
+         << m_cfg.vCodec << " -c:a " << m_cfg.aCodec << " -crf "
+         << m_cfg.crf << " -b:a " << to_string(m_cfg.aBitRate);
       cli.encSettings.commandLineParameters = ss.str();
     }
-  }
-  else
-  {
-    cli.encSettings.fileLength = 0;
-    cli.originalFileName.clear();
   }
 
   cli.originalFileId = srcId;
@@ -815,7 +814,7 @@ void MediaArchiverDaemon::prepareNewSession(ConnectedClient &cli)
   cli.originalFileId = 0;
   cli.tempFileName = "";
   cli.originalFileName = "";
-  cli.encSettings = MediaEncoderSettings();
+  cli.encSettings = MediaEncoderSettings{.fileLength = 0};
   cli.encResult = EncodingResultInfo();
   cli.inFile = ifstream();
   cli.outFile = ofstream();
