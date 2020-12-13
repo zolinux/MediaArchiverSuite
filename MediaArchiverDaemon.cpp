@@ -748,13 +748,14 @@ bool MediaArchiverDaemon::writeChunk(const std::vector<char> &data)
   auto &cli = checkClient();
   if(!cli.originalFileId || !cli.outFile.is_open() ||
     !cli.encResult.fileLength ||
-    cli.outFile.tellp() >= cli.encResult.fileLength)
+    cli.outFile.tellp() + data.size() > cli.encResult.fileLength)
   {
     LOG_F(ERROR,
       "writeChunk: state: id=%u, outFile=%s, resultLength=%lu, overrun=%i",
       cli.originalFileId, cli.outFile.is_open() ? "OPEN" : "CLOSED",
       cli.encResult.fileLength,
-      cli.outFile.tellp() >= cli.encResult.fileLength);
+      cli.outFile.tellp() + data.size() > cli.encResult.fileLength);
+
     throw std::runtime_error("writeChunk: invalid state");
   }
 
