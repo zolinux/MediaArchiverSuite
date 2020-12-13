@@ -41,6 +41,7 @@ void generateToken()
   char buf[64];
   std::random_device rd;
   std::mt19937 mt(rd());
+  mt.seed(time(nullptr));
   std::uniform_int_distribution<> dist(0, std::numeric_limits<int>::max());
   snprintf(buf, sizeof(buf), "%X", dist(mt));
   gToken = std::string(buf);
@@ -55,6 +56,7 @@ std::unique_ptr<ServerIf> connect()
   REQUIRE_NOTHROW(ver = rpc->getVersion());
   REQUIRE(ver);
 
+  if(gToken.empty())
   generateToken();
   REQUIRE_NOTHROW(rpc->authenticate(gToken));
   return rpc;
@@ -171,4 +173,70 @@ TEST_CASE("file transfer antitest (pass)", "[encfail]")
 
   getNextFile(rpc, mes);
   REQUIRE_NOTHROW(rpc->abort());
+}
+
+TEST_CASE("connection error during transfer (pass)", "[networkerror]")
+{
+  MediaEncoderSettings mes;
+  bool success = false;
+
+  auto rpc = connect();
+  getNextFile(rpc, mes);
+
+  DataChunk file;
+
+  const int disconnectAtChunk = 3;
+  int chunks = 0;
+  do
+  {
+    REQUIRE_NOTHROW(success = rpc->readChunk(file));
+  } while(chunks++ < disconnectAtChunk);
+
+  // let the connection really break;
+  rpc.reset();
+  std::this_thread::sleep_for(std::chrono::seconds(4));
+  size_t length = 0;
+
+  // reconnect
+  rpc = connect();
+  rpc->reset();
+  do
+  {
+    REQUIRE_NOTHROW(success = rpc->readChunk(file));
+    length += file.size();
+  } while(success);
+
+  REQUIRE(length == mes.fileLength);
+
+  length >>= 1;
+  EncodingResultInfo eri(
+    EncodingResultInfo::EncodingResult::OK, length, "");
+  REQUIRE_NOTHROW(rpc->postFile(eri));
+
+  file.resize(gCfg.chunkSize);
+  chunks = 0;
+  do
+  {
+    REQUIRE_NOTHROW(success = rpc->writeChunk(file));
+  } while(chunks++ < disconnectAtChunk);
+
+  // let the connection really break;
+  REQUIRE_NOTHROW(rpc.reset());
+  std::this_thread::sleep_for(std::chrono::seconds(4));
+
+  REQUIRE_NOTHROW(rpc = connect());
+  REQUIRE_NOTHROW(rpc->reset());
+
+  chunks = 0;
+  while(length)
+  {
+    if(length < gCfg.chunkSize)
+    {
+      file.resize(length);
+    }
+
+    REQUIRE_NOTHROW(success = rpc->writeChunk(file));
+    length -= file.size();
+    REQUIRE((length == 0) ^ success);
+  }
 }
