@@ -13,7 +13,7 @@ add_executable(test_inotify
 
 # target_compile_definitions(test_inotify PRIVATE NORPC)
 target_include_directories(test_inotify PRIVATE ${CMAKE_CURRENT_LIST_DIR})
-target_link_libraries(test_inotify PUBLIC filesystemwatcher)
+target_link_libraries(test_inotify PUBLIC filesystemwatcher Loguru)
 
 add_executable(test_daemon
     test_daemon.cpp

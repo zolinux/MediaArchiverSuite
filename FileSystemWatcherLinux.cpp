@@ -12,6 +12,7 @@
 #include <vector>
 #include <string.h>
 
+#include <loguru/loguru.hpp>
 #include "FileSystemWatcherLinux.hpp"
 
 namespace
@@ -25,7 +26,7 @@ const uint32_t FileSystemWatcherLinux::InotifyFlags = IN_DELETE |
   IN_DELETE_SELF | IN_MOVE | IN_CLOSE | IN_ONLYDIR;
 
 const std::chrono::milliseconds FileSystemWatcherLinux::MoveTimeout =
-  std::chrono::milliseconds(250);
+  std::chrono::seconds(5);
 
 FileSystemWatcherLinux::FileSystemWatcherLinux(
   IFileSystemChangeListener &listener,
@@ -37,7 +38,7 @@ FileSystemWatcherLinux::FileSystemWatcherLinux(
   , m_cookie(0)
   , m_dst(listener)
 {
-  int fd = inotify_init1(IN_NONBLOCK);
+  const int fd = inotify_init1(IN_NONBLOCK);
   if(fd < 0)
   {
     throw std::runtime_error("Error initializing inotify");
@@ -51,21 +52,21 @@ FileSystemWatcherLinux::FileSystemWatcherLinux(
     if(!folder.compare(
          0, ::DirWatchRegexPrefix.length(), ::DirWatchRegexPrefix))
     {
-      auto argument = folder.substr(DirWatchRegexPrefix.length());
-      auto separator = argument.find('*');
+      const auto argument = folder.substr(DirWatchRegexPrefix.length());
+      const auto separator = argument.find('*');
       if(separator == std::string::npos)
       {
         throw std::runtime_error(
           std::string("regex format invalid: ") + argument);
       }
 
-      auto startFolder = argument.substr(0, separator);
-      auto re = argument.substr(separator + 1);
+      const auto startFolder = argument.substr(0, separator);
+      const auto re = argument.substr(separator + 1);
 
       std::stringstream ss;
       ss << "/usr/bin/find " << startFolder << " -type d -regex '" << re
          << "'";
-      std::string command = ss.str();
+      const std::string command = ss.str();
       std::unique_ptr<FILE> f(popen(command.c_str(), "r"));
       if(!f)
       {
@@ -77,7 +78,7 @@ FileSystemWatcherLinux::FileSystemWatcherLinux(
       size_t len = 0;
       try
       {
-        while((getline(&line, &len, f.get())) != -1)
+        while(!m_stopping && (getline(&line, &len, f.get())) != -1)
         {
           line[strlen(line) - 1] = 0; // trim line
           watchDir(line);
@@ -123,7 +124,7 @@ void FileSystemWatcherLinux::watchDir(const std::string &dirName)
   struct dir_t
   {
     DIR *dir;
-    std::string name;
+    const std::string name;
   };
 
   std::vector<dir_t> stack;
@@ -131,7 +132,7 @@ void FileSystemWatcherLinux::watchDir(const std::string &dirName)
 
   while(stack.size())
   {
-    struct dirent *entry;
+    const struct dirent *entry;
     dir_t &cd = stack.back();
 
     if(cd.dir == nullptr)
@@ -143,7 +144,7 @@ void FileSystemWatcherLinux::watchDir(const std::string &dirName)
       }
       else
       {
-        auto wd = inotify_add_watch(
+        const auto wd = inotify_add_watch(
           m_fd, cd.name.c_str(), FileSystemWatcherLinux::InotifyFlags);
         if(wd < 0)
         {
@@ -156,7 +157,7 @@ void FileSystemWatcherLinux::watchDir(const std::string &dirName)
 
     while((entry = readdir(cd.dir)) != NULL)
     {
-      auto fullName = cd.name + "/" + entry->d_name;
+      const auto fullName = cd.name + "/" + entry->d_name;
       if(entry->d_type == DT_REG)
       {
         m_dst.onFileSystemChange(
@@ -165,7 +166,7 @@ void FileSystemWatcherLinux::watchDir(const std::string &dirName)
       }
       else if(entry->d_type == DT_DIR)
       {
-        std::string name(entry->d_name);
+        const std::string name(entry->d_name);
         if(name == "." || name == "..")
           continue;
 
@@ -226,33 +227,31 @@ void FileSystemWatcherLinux::handleInotifyEvent(
     // user does not receive any directory-related info, but we process it
     if(e->mask & IN_DELETE)
     {
-      std::cerr << "directory " << fileName << " was deleted" << std::endl;
+      LOG_F(4, "directory '%s' was deleted", fileName.c_str());
       inotify_rm_watch(m_fd, e->wd);
       m_watchedDirs.erase(e->wd);
     }
     else if(e->mask & IN_CREATE)
     {
       // directory created. add it to watched list
-      auto ret = inotify_add_watch(
+      const auto ret = inotify_add_watch(
         m_fd, fileName.c_str(), FileSystemWatcherLinux::InotifyFlags);
       if(ret < 0)
       {
-        std::cerr << "directory " << fileName
-                  << " could not be added to watched directories:" << ret
-                  << std::endl;
+        LOG_F(ERROR,
+          "directory '%s' could not be added to watched directories: %i",
+          fileName.c_str(), ret);
       }
       else
       {
         m_watchedDirs[ret] = fileName;
-        std::cerr << "directory " << fileName << " was created"
-                  << std::endl;
+        LOG_F(4, "directory '%s' was created", fileName.c_str());
       }
     }
     else if(e->mask & IN_UNMOUNT)
     {
       // directory unmounted
-      std::cerr << "directory " << fileName << " was unmounted"
-                << std::endl;
+      LOG_F(4, "directory '%s' was unmounted", fileName.c_str());
       m_dst.onFileSystemChange(
         IFileSystemChangeListener::EventType::Unmounted, fileName,
         fileName);
@@ -262,14 +261,16 @@ void FileSystemWatcherLinux::handleInotifyEvent(
     }
     else
     { // ToDo: move directories, add to watch
-      std::cerr << "directory " << fileName << " was " << e->mask
-                << std::endl;
+      LOG_F(
+        4, "directory '%s' inotify event %08X", fileName.c_str(), e->mask);
     }
   }
   else
   {
-    std::cerr << "file " << fileName << " ";
-    bool movePending = m_cookie > 0 &&
+    std::stringstream ssLog;
+
+    ssLog << "file '" << fileName << "' ";
+    const bool movePending = m_cookie > 0 &&
       (std::chrono::steady_clock::now() - m_moveStart >
         FileSystemWatcherLinux::MoveTimeout);
 
@@ -282,28 +283,28 @@ void FileSystemWatcherLinux::handleInotifyEvent(
       m_dst.onFileSystemChange(
         IFileSystemChangeListener::EventType::FileMoved,
         m_moveFrom ? m_moveName : n, m_moveFrom ? n : m_moveName);
-      std::cerr << "movePending ";
+      ssLog << "movePending";
     }
 
     if(e->mask & IN_CLOSE_WRITE)
     {
-      std::cerr << "created";
+      ssLog << "created";
       // file created
       m_dst.onFileSystemChange(
         IFileSystemChangeListener::EventType::FileCreated, "", fileName);
     }
     else if(e->mask & IN_DELETE)
     {
-      std::cerr << "deleted ";
+      ssLog << "deleted";
       // file created
       m_dst.onFileSystemChange(
         IFileSystemChangeListener::EventType::FileDeleted, "", fileName);
     }
-    else if(e->mask & IN_MOVE)
+    else if(e->mask & IN_MOVE && e->cookie)
     {
-      if(e->cookie != m_cookie || e->cookie == 0)
+      if(m_cookie == 0)
       {
-        std::cerr << "move start ";
+        ssLog << "move start";
         // 1st part of possible 2 messages
         m_cookie = e->cookie;
         m_moveName = fileName;
@@ -312,26 +313,30 @@ void FileSystemWatcherLinux::handleInotifyEvent(
       }
       else if(e->cookie == m_cookie)
       {
-        std::cerr << "move end ";
+        ssLog << "move end";
         // pair of move found
         m_cookie = 0;
-        bool from = e->mask & IN_MOVED_FROM;
-        std::string src = from ? fileName : m_moveName;
-        std::string dst = from ? m_moveName : fileName;
+        const bool from = e->mask & IN_MOVED_FROM;
+        const std::string src = from ? fileName : m_moveName;
+        const std::string dst = from ? m_moveName : fileName;
 
         m_dst.onFileSystemChange(
           IFileSystemChangeListener::EventType::FileMoved, src, dst);
       }
+      else
+      {
+        LOG_F(ERROR, "INVALID INOTIFY EVENT: %s", fileName.c_str());
+      }
     }
     else if(e->mask & IN_CLOSE_NOWRITE)
     {
-      std::cerr << "existing file closed: " << e->mask;
+      ssLog << "existing file closed: " << e->mask;
     }
     else
     {
-      std::cerr << "unknown: " << e->mask;
+      ssLog << "unknown: " << e->mask;
     }
-    std::cerr << std::endl;
+    LOG_F(4, ssLog.str().c_str());
   }
 }
 
@@ -340,18 +345,18 @@ void FileSystemWatcherLinux::threadMain()
   while(!m_stopping)
   {
     fd_set rfds;
-    int retval;
 
     /* Watch to see when it has input. */
     FD_ZERO(&rfds);
     FD_SET(m_eventfd, &rfds);
     FD_SET(m_fd, &rfds);
 
-    retval = select(std::max(m_fd, m_eventfd) + 1, &rfds, NULL, NULL, NULL);
+    const int retval = select(
+      std::max(m_fd, m_eventfd) + 1, &rfds, NULL, NULL, NULL);
 
     if(retval == -1)
     {
-      std::cerr << "select returned -1" << std::endl;
+      LOG_F(ERROR, "select returned -1");
     }
     else if(retval)
     {
@@ -364,11 +369,11 @@ void FileSystemWatcherLinux::threadMain()
       {
         int u = 0;
         char buffer[1024];
-        ssize_t len = read(m_fd, buffer, sizeof(buffer));
+        const ssize_t len = read(m_fd, buffer, sizeof(buffer));
 
         while(u < len)
         {
-          struct inotify_event *e = (struct inotify_event *)&buffer[u];
+          const struct inotify_event *e = (struct inotify_event *)&buffer[u];
           handleInotifyEvent(e);
 
           u += sizeof(struct inotify_event) + e->len;
@@ -377,7 +382,7 @@ void FileSystemWatcherLinux::threadMain()
     }
     else
     {
-      std::cerr << "select returned 0" << std::endl;
+      LOG_F(ERROR, "select returned 0");
     }
   }
 }
