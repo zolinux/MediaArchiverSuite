@@ -304,7 +304,7 @@ void FileSystemWatcherLinux::handleInotifyEvent(
     {
       if(m_cookie == 0)
       {
-        ssLog << "move start";
+        ssLog << "move start (" << e->cookie << ")";
         // 1st part of possible 2 messages
         m_cookie = e->cookie;
         m_moveName = fileName;
@@ -313,7 +313,7 @@ void FileSystemWatcherLinux::handleInotifyEvent(
       }
       else if(e->cookie == m_cookie)
       {
-        ssLog << "move end";
+        ssLog << "move end (" << e->cookie << ")";
         // pair of move found
         m_cookie = 0;
         const bool from = e->mask & IN_MOVED_FROM;
