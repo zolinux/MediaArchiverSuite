@@ -79,7 +79,6 @@ int main(int argc, char **argv)
 
   // Register signal and signal handler
   signal(SIGINT, signal_callback_handler);
-  signal(SIGABRT, signal_callback_handler);
 
 #ifndef WIN32
   signal(SIGKILL, signal_callback_handler);
