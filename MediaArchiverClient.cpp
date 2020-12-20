@@ -454,8 +454,8 @@ void MediaArchiverClient::doConvert()
           throw std::runtime_error("3");
         }
 
-        m_dstFile.seekg(0, std::ios::end);
-        m_encResult.fileLength = m_dstFile.tellg();
+        m_dstFile.ignore(std::numeric_limits<std::streamsize>::max());
+        m_encResult.fileLength = m_dstFile.gcount();
         // leave file open for transmission stage
 
         // everything ok, Connect to server and send status
@@ -506,6 +506,7 @@ void MediaArchiverClient::doSendResult()
         m_encResult.fileLength > 0)
       {
         m_dstFile.seekg(0, std::ios_base::beg);
+        m_dstFile.clear(); // remove EOF
         m_mainState = MainStates::Transmitting;
       }
       else
@@ -531,6 +532,13 @@ void MediaArchiverClient::doTransmit()
   {
     DataChunk chunk(m_cfg.chunkSize);
     m_dstFile.read(chunk.data(), chunk.size());
+
+    const auto lastReadLength = m_dstFile.gcount();
+    if(lastReadLength < chunk.size())
+    {
+      chunk.resize(lastReadLength);
+    }
+
     auto res = m_rpc->writeChunk(chunk);
 
     if(m_dstFile.eof())
@@ -540,6 +548,7 @@ void MediaArchiverClient::doTransmit()
         throw NetworkError(
           "Server still wants to receive data but end of local file has been reached");
       }
+
       cleanUp();
       m_mainState = MainStates::Idle;
     }
@@ -553,6 +562,7 @@ void MediaArchiverClient::doTransmit()
     // after an error the transmission starts from the beginning
     m_rpc->reset();
     m_dstFile.seekg(0, std::ios_base::beg);
+    m_dstFile.clear();
   }
 }
 
