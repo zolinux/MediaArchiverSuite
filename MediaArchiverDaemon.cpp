@@ -422,8 +422,6 @@ void MediaArchiverDaemon::onFileSystemChange(
 
   size_t size[2];
 
-  LOG_F(4, "onFileSystemChange: e=%i, src=%s, dst=%s", static_cast<int>(e),
-    src.c_str(), dst.c_str());
   if(!dst.empty())
   {
     size[1] = FileCopier().getFileSize(dst.c_str());
@@ -450,6 +448,8 @@ void MediaArchiverDaemon::onFileSystemChange(
 
   if(isInterestingFile(dst))
   {
+    LOG_F(5, "onFileSystemChange: e=%i, src=%s, dst=%s",
+      static_cast<int>(e), src.c_str(), dst.c_str());
     if(dstIsArchive) {}
     else
     {
@@ -565,7 +565,7 @@ void MediaArchiverDaemon::abort()
   cli.originalFileId = 0;
   cli.tempFileName = "";
   cli.originalFileName = "";
-  cli.encSettings = MediaEncoderSettings();
+  cli.encSettings = MediaEncoderSettings{.fileLength = 0};
   cli.encResult = EncodingResultInfo();
 }
 
@@ -619,7 +619,7 @@ bool MediaArchiverDaemon::getNextFile(ConnectedClient &cli,
       cli.encSettings.fileLength = fi.fileSize;
       cli.originalFileName = fi.fileName;
       stringstream ss;
-      ss << "-y -hide_banner -copyts -map_metadata 0 -movflags use_metadata_tags -preset veryfast -c:v "
+      ss << "-y -hide_banner -nostats -loglevel warning -copyts -map_metadata 0 -movflags use_metadata_tags -preset veryfast -c:v "
          << m_cfg.vCodec << " -c:a " << m_cfg.aCodec << " -crf "
          << m_cfg.crf << " -b:a " << to_string(m_cfg.aBitRate);
       cli.encSettings.commandLineParameters = ss.str();
