@@ -265,6 +265,12 @@ void MediaArchiverClient::doIdle()
 
 void MediaArchiverClient::doReceive()
 {
+  if(m_stopRequested)
+  {
+    m_shutdown = true;
+    return;
+  }
+
   try
   {
     auto cont = m_rpc->readChunk(m_srcFile);
@@ -273,6 +279,8 @@ void MediaArchiverClient::doReceive()
       // EOF
       if(m_srcFile.tellp() != m_encSettings.fileLength)
       {
+        LOG_F(ERROR, "file transmission error at %lu/%lu",
+          m_srcFile.tellp(), m_encSettings.fileLength);
         throw NetworkError(
           "Received file size is different to one reported by server");
       }
@@ -299,6 +307,9 @@ void MediaArchiverClient::doReceive()
   {
     LOG_F(ERROR, "doReceive: %s", e.what());
     m_srcFile.seekp(0, std::ios_base::beg);
+
+    // start reading the file from the beginning
+    m_rpc->reset();
   }
 }
 
