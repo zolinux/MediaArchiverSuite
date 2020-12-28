@@ -450,10 +450,10 @@ void MediaArchiverClient::doConvert()
             << m_encSettings.fileExtension;
         int lenIn = getMovieLength(cmd.str());
 
-        if(lenOut != lenIn)
+        if(abs(lenOut - lenIn) > 1)
         {
-          LOG_F(
-            ERROR, "stream duration is different: %i != %i", lenIn, lenOut);
+          LOG_F(ERROR, "stream duration difference too much: %i != %i",
+            lenIn, lenOut);
           throw std::runtime_error("2");
         }
 
