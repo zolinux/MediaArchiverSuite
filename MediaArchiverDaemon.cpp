@@ -38,6 +38,7 @@ static MediaArchiver::DaemonConfig gCfg{
   .aBitRate = 80000,
   .crf = 22,
   .chunkSize = 256 * 1024,
+  .serverInstances = 5,
   .foldersToWatch = "",
   .filenameMatchPattern = std::regex(
     "\\.(mp4|3gp|mov|avi|mts|vob|ts|mpg|mpe|mpeg|divx|qt|wmv|asf|flv)$",
@@ -98,7 +99,7 @@ void MediaArchiverDaemon::start()
   LOG_F(1, "Starting service");
   try
   {
-    m_srv.async_run(1);
+    m_srv.async_run(m_cfg.serverInstances);
   }
   catch(const std::exception &e)
   {
@@ -394,6 +395,10 @@ bool MediaArchiverConfig<DaemonConfig>::parse(
   else if(k == "chunksize")
   {
     config.chunkSize = atoi(value.c_str());
+  }
+  else if(k == "serverinstances")
+  {
+    config.serverInstances = atoi(value.c_str());
   }
   else
     return false;

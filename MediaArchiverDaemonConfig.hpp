@@ -13,6 +13,7 @@ struct DaemonConfig
   int aBitRate;
   int crf;
   int chunkSize;
+  int serverInstances;
   std::string foldersToWatch;
   std::regex filenameMatchPattern;
   std::string vCodec;
