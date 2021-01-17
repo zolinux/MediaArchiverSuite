@@ -13,6 +13,7 @@
 #include <catch.hpp>
 
 #include "ServerIf.hpp"
+#include "FileUtils.hpp"
 
 using namespace MediaArchiver;
 using namespace std;
@@ -239,4 +240,21 @@ TEST_CASE("connection error during transfer (pass)", "[networkerror]")
     length -= file.size();
     REQUIRE((length == 0) ^ success);
   }
+}
+
+TEST_CASE("setfileTime", "[filetime]")
+{
+  timespec ts[2];
+  timespec ts2[2];
+
+  FileUtils().getFileTimes("/etc/passwd", ts);
+  const char *fname = "/tmp/test.txt";
+  system((std::string("touch ") + fname).c_str());
+  FileUtils().setFileTimes(fname, ts);
+  memset(ts2, 0, sizeof(ts2));
+  FileUtils().getFileTimes(fname, ts2);
+  REQUIRE(ts2[0].tv_sec == ts[0].tv_sec);
+  REQUIRE(ts2[0].tv_nsec == ts[0].tv_nsec);
+  REQUIRE(ts2[1].tv_sec == ts[1].tv_sec);
+  REQUIRE(ts2[1].tv_nsec == ts[1].tv_nsec);
 }

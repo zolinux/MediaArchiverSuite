@@ -117,6 +117,16 @@ void FileCopierLinux::getFileTimes(const char *src, timespec mtime[2])
   mtime[1] = finfo.st_mtim;
 }
 
+void FileCopierLinux::setFileTimes(const char *src, timespec mtime[2])
+{
+  timeval tv[2];
+
+  TIMESPEC_TO_TIMEVAL(&tv[0], &mtime[0]);
+  TIMESPEC_TO_TIMEVAL(&tv[1], &mtime[1]);
+
+  utimes(src, tv);
+}
+
 size_t FileCopierLinux::getFileSize(const char *src)
 {
   struct stat finfo;

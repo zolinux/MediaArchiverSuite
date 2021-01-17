@@ -12,6 +12,7 @@ public:
   virtual void moveFile(
     const char *src, const char *dst, const timespec *const mtime) = 0;
   virtual void getFileTimes(const char *src, timespec mtime[2]) = 0;
+  virtual void setFileTimes(const char *src, timespec mtime[2]) = 0;
   virtual size_t getFileSize(const char *src) = 0;
   virtual ~IFileCopier() = default;
 };

@@ -774,6 +774,7 @@ bool MediaArchiverDaemon::writeChunk(const std::vector<char> &data)
     LOG_F(INFO, "writeChunk: Copying finished, file can be moved");
     std::lock_guard<std::mutex> lck(m_mtxFileMove);
     cli.outFile.close();
+    FileCopier().setFileTimes(cli.tempFileName.c_str(), cli.times);
 
     // add file to queue for moving it to place in main thread
     prepareNewSession(cli);
