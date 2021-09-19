@@ -151,8 +151,8 @@ void MediaArchiverDaemon::start()
     {
       try
       {
-        FileCopier().moveFile(
-          ftm.tmp.c_str(), ftm.result.fileName.c_str(), &ftm.atime);
+        FileCopier().moveFile(ftm.tmp.c_str(), ftm.result.fileName.c_str(),
+          &ftm.atime);
         LOG_F(1, "File %u '%s' was moved to place",
           ftm.result.originalFileId, ftm.result.fileName.c_str());
         m_db.addEncodedFile(ftm.result);
@@ -206,45 +206,54 @@ void MediaArchiverDaemon::stop(bool forced)
   if(forced) {}
 }
 
-MediaArchiverDaemon::MediaArchiverDaemon(
-  const DaemonConfig &cfg, IDatabase &db)
+MediaArchiverDaemon::MediaArchiverDaemon(const DaemonConfig &cfg,
+  IDatabase &db)
   : m_cfg(cfg)
   , m_db(db)
   , m_srv(cfg.serverPort)
 {
   init();
 
-  m_srv.bind(RpcFunctions::getVersion, []() -> uint32_t {
-    auto id = rpc::this_session().id();
-    LOG_F(INFO, "getVersion requested (%li)", id);
-    return 1;
-  });
+  m_srv.bind(RpcFunctions::getVersion,
+    []() -> uint32_t
+    {
+      auto id = rpc::this_session().id();
+      LOG_F(INFO, "getVersion requested (%li)", id);
+      return 1;
+    });
 
-  m_srv.bind(RpcFunctions::authenticate, [&](const string &token) -> void {
-    // set thread name if not yet done
-    auto id = rpc::this_session().id();
-    stringstream ss;
-    ss << "RPC_" << std::hex << id;
-    loguru::set_thread_name(ss.str().c_str());
+  m_srv.bind(RpcFunctions::authenticate,
+    [&](const string &token) -> void
+    {
+      // set thread name if not yet done
+      auto id = rpc::this_session().id();
+      stringstream ss;
+      ss << "RPC_" << std::hex << id;
+      loguru::set_thread_name(ss.str().c_str());
 
-    LOG_F(INFO, "Auth requested (%li, %X): %s", id, this_thread::get_id(),
-      token.c_str());
-    this->authenticate(token);
-  });
+      LOG_F(INFO, "Auth requested (%li, %X): %s", id, this_thread::get_id(),
+        token.c_str());
+      this->authenticate(token);
+    });
 
-  m_srv.bind(RpcFunctions::reset, [&]() -> void {
-    LOG_F(INFO, "Reset transmission requested (%li)s",
-      rpc::this_session().id());
-    this->reset();
-  });
+  m_srv.bind(RpcFunctions::reset,
+    [&]() -> void
+    {
+      LOG_F(INFO, "Reset transmission requested (%li)s",
+        rpc::this_session().id());
+      this->reset();
+    });
 
-  m_srv.bind(RpcFunctions::abort, [&]() -> void {
-    LOG_F(INFO, "Abort requested (%li)", rpc::this_session().id());
-    this->abort();
-  });
+  m_srv.bind(RpcFunctions::abort,
+    [&]() -> void
+    {
+      LOG_F(INFO, "Abort requested (%li)", rpc::this_session().id());
+      this->abort();
+    });
 
   m_srv.bind(RpcFunctions::getNextFile,
-    [&](const MediaFileRequirements &filter) -> MediaEncoderSettings {
+    [&](const MediaFileRequirements &filter) -> MediaEncoderSettings
+    {
       LOG_SCOPE_F(2, "getNextFile");
       MediaEncoderSettings settings;
       settings.fileLength = 0;
@@ -252,8 +261,7 @@ MediaArchiverDaemon::MediaArchiverDaemon(
       // the loop if present to handle an event that the requested file
       // cannot be opened for some reason. This error should not propagate
       // to client, but simply another file should be taken.
-      do
-      {
+      do {
         try
         {
           auto &cli = checkClient();
@@ -278,8 +286,9 @@ MediaArchiverDaemon::MediaArchiverDaemon(
       return settings;
     });
 
-  m_srv.bind(
-    RpcFunctions::postFile, [&](const EncodingResultInfo &result) -> void {
+  m_srv.bind(RpcFunctions::postFile,
+    [&](const EncodingResultInfo &result) -> void
+    {
       LOG_F(3, "postFile: %i, %luBytes, %s", result.result,
         result.fileLength, result.error.c_str());
       try
@@ -294,46 +303,50 @@ MediaArchiverDaemon::MediaArchiverDaemon(
       }
     });
 
-  m_srv.bind(RpcFunctions::writeChunk, [&](const DataChunk &chunk) -> bool {
-    bool ret = false;
-    try
+  m_srv.bind(RpcFunctions::writeChunk,
+    [&](const DataChunk &chunk) -> bool
     {
-      ret = this->writeChunk(chunk);
-    }
-    catch(const std::exception &e)
-    {
-      LOG_F(
-        ERROR, "WriteChunk (%li): %s", rpc::this_session().id(), e.what());
-      rpc::this_handler().respond_error(
-        std::string("I/O error") + e.what());
-    }
-    return ret;
-  });
+      bool ret = false;
+      try
+      {
+        ret = this->writeChunk(chunk);
+      }
+      catch(const std::exception &e)
+      {
+        LOG_F(ERROR, "WriteChunk (%li): %s", rpc::this_session().id(),
+          e.what());
+        rpc::this_handler().respond_error(
+          std::string("I/O error") + e.what());
+      }
+      return ret;
+    });
 
-  m_srv.bind(RpcFunctions::readChunk, [&]() -> tuple<bool, DataChunk> {
-    DataChunk chunk(m_cfg.chunkSize);
-    bool haveMore = false;
-    try
+  m_srv.bind(RpcFunctions::readChunk,
+    [&]() -> tuple<bool, DataChunk>
     {
-      haveMore = this->readChunk(chunk);
-    }
-    catch(const std::exception &e)
-    {
-      LOG_F(
-        ERROR, "ReadChunk (%li): %s", rpc::this_session().id(), e.what());
-      rpc::this_handler().respond_error(
-        std::string("I/O error:") + e.what());
-    }
+      DataChunk chunk(m_cfg.chunkSize);
+      bool haveMore = false;
+      try
+      {
+        haveMore = this->readChunk(chunk);
+      }
+      catch(const std::exception &e)
+      {
+        LOG_F(ERROR, "ReadChunk (%li): %s", rpc::this_session().id(),
+          e.what());
+        rpc::this_handler().respond_error(
+          std::string("I/O error:") + e.what());
+      }
 
-    return make_tuple(haveMore, std::move(chunk));
-  });
+      return make_tuple(haveMore, std::move(chunk));
+    });
 }
 
 MediaArchiverDaemon::~MediaArchiverDaemon() {}
 
 template<>
-bool MediaArchiverConfig<DaemonConfig>::parse(
-  const std::string &key, const std::string &value, DaemonConfig &config)
+bool MediaArchiverConfig<DaemonConfig>::parse(const std::string &key,
+  const std::string &value, DaemonConfig &config)
 {
   auto k = key;
   auto &f = std::use_facet<std::ctype<char>>(std::locale());
@@ -345,8 +358,8 @@ bool MediaArchiverConfig<DaemonConfig>::parse(
   }
   else if(k == "filenamematchpattern")
   {
-    config.filenameMatchPattern = std::regex(
-      value.c_str(), std::regex::ECMAScript | std::regex::icase);
+    config.filenameMatchPattern = std::regex(value.c_str(),
+      std::regex::ECMAScript | std::regex::icase);
   }
   else if(k == "vcodec")
   {
@@ -387,6 +400,10 @@ bool MediaArchiverConfig<DaemonConfig>::parse(
   else if(k == "abitrate")
   {
     config.aBitRate = atoi(value.c_str());
+  }
+  else if(k == "vbitrate")
+  {
+    config.vBitRate = atoi(value.c_str());
   }
   else if(k == "crf")
   {
