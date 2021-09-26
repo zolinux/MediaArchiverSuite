@@ -18,6 +18,9 @@
 
 namespace MediaArchiver
 {
+/** Connect to server **/
+IServer *createServer(const MediaArchiver::ClientConfig &config);
+
 class MediaArchiverClient
 {
 protected:

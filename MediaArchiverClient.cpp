@@ -21,7 +21,6 @@
 #include "rpc/rpc_error.h"
 #include "MediaArchiverClient.hpp"
 #include "MediaArchiverConfig.hpp"
-#include "ServerIf.hpp"
 
 #include "loguru.hpp"
 
@@ -131,7 +130,7 @@ void MediaArchiverClient::checkCreateRpc()
 {
   if(!m_rpc || !m_rpc->isConnected())
   {
-    m_rpc.reset(new ServerIf(m_cfg));
+    m_rpc.reset(createServer(m_cfg));
   }
 }
 
@@ -283,7 +282,8 @@ void MediaArchiverClient::doReceive()
     if(!cont)
     {
       // EOF
-      if(m_srcFile.tellp() != m_encSettings.fileLength)
+      const auto currPos = m_srcFile.tellp();
+      if(currPos != m_encSettings.fileLength)
       {
         LOG_F(ERROR, "file transmission error at %lu/%lu",
           m_srcFile.tellp(), m_encSettings.fileLength);
@@ -589,8 +589,8 @@ std::string MediaArchiverClient::getTranscodeCommand() const
       << InTmpFileName << "." << m_encSettings.fileExtension << "\" "
       << m_encSettings.commandLineParameters << " -pass "
       << (m_passNo == 1 ? "1 -an -f null " : "2 ") << " -passlogfile "
-      << passFile.str() << m_cfg.extraCommandLineOptions << outFile.str()
-      << " 2>&1 ";
+      << passFile.str() << " " << m_cfg.extraCommandLineOptions
+      << outFile.str() << " 2>&1 ";
   return cmd.str();
 }
 

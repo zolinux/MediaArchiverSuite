@@ -69,6 +69,8 @@ target_link_libraries(MediaArchiverClient
 
 add_executable(MediaArchiverClientMain
     MediaArchiverClientMain.cpp
+    ServerFactory.cpp
+    ServerIf.hpp
 )
 
 target_link_libraries(MediaArchiverClientMain
