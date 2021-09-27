@@ -36,6 +36,7 @@ static MediaArchiver::DaemonConfig gCfg{
   .verbosity = 0,
   .serverPort = 2020,
   .aBitRate = 80000,
+  .vBitRate = 0,
   .crf = 22,
   .chunkSize = 256 * 1024,
   .serverInstances = 5,
