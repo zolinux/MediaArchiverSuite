@@ -152,7 +152,7 @@ void MediaArchiverDaemon::start()
       try
       {
         FileCopier().moveFile(ftm.tmp.c_str(), ftm.result.fileName.c_str(),
-          &ftm.atime);
+          &ftm.mtime);
         LOG_F(1, "File %u '%s' was moved to place",
           ftm.result.originalFileId, ftm.result.fileName.c_str());
         m_db.addEncodedFile(ftm.result);
@@ -226,7 +226,7 @@ MediaArchiverDaemon::MediaArchiverDaemon(const DaemonConfig &cfg,
     [&](const string &token) -> void
     {
       // set thread name if not yet done
-      auto id = rpc::this_session().id();
+      auto id = static_cast<long>(rpc::this_session().id());
       stringstream ss;
       ss << "RPC_" << std::hex << id;
       loguru::set_thread_name(ss.str().c_str());
@@ -631,7 +631,7 @@ bool MediaArchiverDaemon::getNextFile(ConnectedClient &cli,
         throw runtime_error(ss.str());
       }
 
-      ifstream inFile(fi.fileName, ios::in);
+      ifstream inFile(fi.fileName, ios::in | ios::binary);
       if(!inFile.is_open())
       {
         throw IOError(string("Could not open file: ") + fi.fileName);
@@ -642,8 +642,9 @@ bool MediaArchiverDaemon::getNextFile(ConnectedClient &cli,
       cli.originalFileName = fi.fileName;
       stringstream ss;
       ss << "-y -hide_banner -nostats -loglevel warning -copyts -map_metadata 0 -movflags use_metadata_tags -preset veryfast -c:v "
-         << m_cfg.vCodec << " -c:a " << m_cfg.aCodec << " -crf "
-         << m_cfg.crf << " -b:a " << to_string(m_cfg.aBitRate);
+         << m_cfg.vCodec << " -b:v " << to_string(m_cfg.vBitRate)
+         << " -crf " << m_cfg.crf << " -c:a " << m_cfg.aCodec << " -b:a "
+         << to_string(m_cfg.aBitRate);
       cli.encSettings.commandLineParameters = ss.str();
     }
   }
@@ -769,14 +770,16 @@ bool MediaArchiverDaemon::writeChunk(const std::vector<char> &data)
 {
   auto &cli = checkClient();
   if(!cli.originalFileId || !cli.outFile.is_open() ||
-    !cli.encResult.fileLength ||
-    cli.outFile.tellp() + data.size() > cli.encResult.fileLength)
+    !cli.encResult.fileLength || cli.outFile.bad() ||
+    static_cast<size_t>(cli.outFile.tellp()) + data.size() >
+      cli.encResult.fileLength)
   {
     LOG_F(ERROR,
       "writeChunk: state: id=%u, outFile=%s, resultLength=%lu, overrun=%i",
       cli.originalFileId, cli.outFile.is_open() ? "OPEN" : "CLOSED",
       cli.encResult.fileLength,
-      cli.outFile.tellp() + data.size() > cli.encResult.fileLength);
+      static_cast<size_t>(cli.outFile.tellp()) + data.size() >
+        cli.encResult.fileLength);
 
     throw std::runtime_error("writeChunk: invalid state");
   }
