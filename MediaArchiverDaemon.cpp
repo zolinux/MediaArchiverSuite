@@ -642,7 +642,7 @@ bool MediaArchiverDaemon::getNextFile(ConnectedClient &cli,
       cli.encSettings.fileLength = fi.fileSize;
       cli.originalFileName = fi.fileName;
       stringstream ss;
-      ss << "-y -hide_banner -nostats -loglevel warning -copyts -map_metadata 0 -movflags use_metadata_tags -preset veryfast -c:v "
+      ss << "-y -hide_banner -nostats -loglevel warning -copyts -map_metadata 0 -movflags use_metadata_tags -c:v "
          << m_cfg.vCodec << " -b:v " << to_string(m_cfg.vBitRate)
          << " -crf " << m_cfg.crf << " -c:a " << m_cfg.aCodec << " -b:a "
          << to_string(m_cfg.aBitRate);

@@ -118,6 +118,14 @@ bool MediaArchiverConfig<ClientConfig>::parse(const std::string &key,
   {
     config.extraCommandLineOptions = value;
   }
+  else if(k == "extraoptionspass1")
+  {
+    config.extraOptionsPass1 = value;
+  }
+  else if(k == "extraoptionspass2")
+  {
+    config.extraOptionsPass2 = value;
+  }
   else
   {
     return false;
@@ -589,8 +597,9 @@ std::string MediaArchiverClient::getTranscodeCommand() const
       << InTmpFileName << "." << m_encSettings.fileExtension << "\" "
       << m_encSettings.commandLineParameters << " -pass "
       << (m_passNo == 1 ? "1 -an -f null " : "2 ") << " -passlogfile "
-      << passFile.str() << " " << m_cfg.extraCommandLineOptions
-      << outFile.str() << " 2>&1 ";
+      << passFile.str() << " " << m_cfg.extraCommandLineOptions << " "
+      << (m_passNo == 1 ? m_cfg.extraOptionsPass1 : m_cfg.extraOptionsPass2)
+      << " " << outFile.str() << " 2>&1 ";
   return cmd.str();
 }
 

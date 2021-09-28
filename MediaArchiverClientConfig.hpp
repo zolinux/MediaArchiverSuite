@@ -18,6 +18,8 @@ struct ClientConfig
   std::string pathToProbe;
   std::string tempFolder;
   std::string extraCommandLineOptions;
+  std::string extraOptionsPass1;
+  std::string extraOptionsPass2;
 };
 }
 
