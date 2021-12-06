@@ -45,7 +45,7 @@ macro(__platform_generic_gnu lang)
 endmacro()
 
 set(CMAKE_SKIP_RPATH TRUE)
-SET(CMAKE_FIND_ROOT_PATH /home/zoli/work/openwrt-sdk/staging_dir/target-mipsel_24kc_musl/usr;/home/zoli/work/openwrt-sdk/staging_dir/toolchain-mipsel_24kc_gcc-8.4.0_musl)
+SET(CMAKE_FIND_ROOT_PATH ${ROOTFS_DIR};/home/zoli/work/openwrt-sdk/staging_dir/toolchain-mipsel_24kc_gcc-8.4.0_musl)
 
 SET(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM BOTH)
 SET(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
