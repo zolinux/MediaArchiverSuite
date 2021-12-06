@@ -21,11 +21,16 @@
 #include "rpc/rpc_error.h"
 #include "MediaArchiverClient.hpp"
 #include "MediaArchiverConfig.hpp"
-#include "ServerIf.hpp"
 
 #include "loguru.hpp"
 
 using namespace MediaArchiver;
+
+namespace
+{
+const std::string pass1ResultFilePrefix = "ffmpeg2pass";
+const std::string pass1ResultFileSuffix = "-0.log";
+}
 
 MediaArchiverClient::MediaArchiverClient(const ClientConfig &cfg)
   : m_cfg(cfg)
@@ -61,8 +66,8 @@ void MediaArchiverClient::stop(bool forced)
 }
 
 template<>
-bool MediaArchiverConfig<ClientConfig>::parse(
-  const std::string &key, const std::string &value, ClientConfig &config)
+bool MediaArchiverConfig<ClientConfig>::parse(const std::string &key,
+  const std::string &value, ClientConfig &config)
 {
   //  std::locale::global(std::locale(""));
   auto k = key;
@@ -113,6 +118,14 @@ bool MediaArchiverConfig<ClientConfig>::parse(
   {
     config.extraCommandLineOptions = value;
   }
+  else if(k == "extraoptionspass1")
+  {
+    config.extraOptionsPass1 = value;
+  }
+  else if(k == "extraoptionspass2")
+  {
+    config.extraOptionsPass2 = value;
+  }
   else
   {
     return false;
@@ -125,7 +138,7 @@ void MediaArchiverClient::checkCreateRpc()
 {
   if(!m_rpc || !m_rpc->isConnected())
   {
-    m_rpc.reset(new ServerIf(m_cfg));
+    m_rpc.reset(createServer(m_cfg));
   }
 }
 
@@ -203,8 +216,8 @@ void MediaArchiverClient::doIdle()
         next = MainStates::Receiving;
         std::stringstream fname;
         fname << InTmpFileName << "." << m_encSettings.fileExtension;
-        m_srcFile.open(
-          fname.str(), std::ios_base::out | std::ios_base::binary);
+        m_srcFile.open(fname.str(),
+          std::ios_base::out | std::ios_base::binary);
         if(m_srcFile.fail())
         {
           std::stringstream ss;
@@ -277,7 +290,8 @@ void MediaArchiverClient::doReceive()
     if(!cont)
     {
       // EOF
-      if(m_srcFile.tellp() != m_encSettings.fileLength)
+      const auto currPos = m_srcFile.tellp();
+      if(currPos != m_encSettings.fileLength)
       {
         LOG_F(ERROR, "file transmission error at %lu/%lu",
           m_srcFile.tellp(), m_encSettings.fileLength);
@@ -291,15 +305,8 @@ void MediaArchiverClient::doReceive()
         .fileLength = 0,
         .error = m_stdOut.str()};
 
-      std::stringstream cmd;
-      cmd << m_cfg.pathToEncoder << " -i \"" << m_cfg.tempFolder << "/"
-          << InTmpFileName << "." << m_encSettings.fileExtension << "\" "
-          << m_encSettings.commandLineParameters << " "
-          << m_cfg.extraCommandLineOptions << " \"" << m_cfg.tempFolder
-          << "/" << OutTmpFileName << m_encSettings.finalExtension
-          << "\" 2>&1";
-
-      launch(cmd.str());
+      m_passNo = 1; // start with pass number 1
+      launch(getTranscodeCommand());
       m_mainState = MainStates::WaitForEncodingFinished;
     }
   }
@@ -428,51 +435,75 @@ void MediaArchiverClient::doConvert()
       retcode = pclose(m_encodeProcess.release());
     }
 
+    bool changeState = true;
     // std::this_thread::sleep_for(std::chrono::seconds(1));
     if(retcode == 0)
     {
       try
       {
-        std::stringstream cmd;
-        cmd << m_cfg.tempFolder << "/" << OutTmpFileName
-            << m_encSettings.finalExtension;
-        std::string outFile = cmd.str();
-        int lenOut = getMovieLength(outFile);
-
-        if(lenOut <= 0)
+        if(m_passNo == 1)
         {
-          LOG_F(ERROR, "output file size is 0 or probe error: %i", lenOut);
-          throw std::runtime_error("1");
+          {
+            std::ifstream fs(m_cfg.tempFolder + "/" +
+                pass1ResultFilePrefix + pass1ResultFileSuffix,
+              std::ios::in);
+            if(!fs.good())
+            {
+              fs.close();
+              throw std::runtime_error(
+                "No logfile found after finishing PASS 1");
+            }
+          }
+          LOG_F(INFO, "doConvert: 1st pass finished, starting 2nd one...");
+          m_passNo = 2;
+          // stay in the current state to process 2nd conversion run
+          changeState = false;
+          launch(getTranscodeCommand());
         }
-
-        cmd = std::stringstream();
-        cmd << m_cfg.tempFolder << "/" << InTmpFileName << "."
-            << m_encSettings.fileExtension;
-        int lenIn = getMovieLength(cmd.str());
-
-        if(abs(lenOut - lenIn) > 1)
+        else
         {
-          LOG_F(ERROR, "stream duration difference too much: %i != %i",
-            lenIn, lenOut);
-          throw std::runtime_error("2");
+          std::stringstream cmd;
+          cmd << m_cfg.tempFolder << "/" << OutTmpFileName
+              << m_encSettings.finalExtension;
+          std::string outFile = cmd.str();
+          int lenOut = getMovieLength(outFile);
+
+          if(lenOut <= 0)
+          {
+            LOG_F(ERROR, "output file size is 0 or probe error: %i",
+              lenOut);
+            throw std::runtime_error("1");
+          }
+
+          cmd = std::stringstream();
+          cmd << m_cfg.tempFolder << "/" << InTmpFileName << "."
+              << m_encSettings.fileExtension;
+          int lenIn = getMovieLength(cmd.str());
+
+          if(abs(lenOut - lenIn) > 1)
+          {
+            LOG_F(ERROR, "stream duration difference too much: %i != %i",
+              lenIn, lenOut);
+            throw std::runtime_error("2");
+          }
+
+          m_dstFile.open(outFile, std::ios::in | std::ios::binary);
+
+          if(!m_dstFile.is_open())
+          {
+            LOG_F(ERROR, "could not open output file for getting length");
+            throw std::runtime_error("3");
+          }
+
+          m_dstFile.ignore(std::numeric_limits<std::streamsize>::max());
+          m_encResult.fileLength = m_dstFile.gcount();
+          // leave file open for transmission stage
+
+          // everything ok, Connect to server and send status
+          m_encResult.result = EncodingResultInfo::EncodingResult::OK;
+          m_encResult.error.clear();
+          LOG_F(INFO, "doConvert: File opened to stream to server");
         }
-
-        m_dstFile.open(outFile, std::ios::in | std::ios::binary);
-
-        if(!m_dstFile.is_open())
-        {
-          LOG_F(ERROR, "could not open output file for getting length");
-          throw std::runtime_error("3");
-        }
-
-        m_dstFile.ignore(std::numeric_limits<std::streamsize>::max());
-        m_encResult.fileLength = m_dstFile.gcount();
-        // leave file open for transmission stage
-
-        // everything ok, Connect to server and send status
-        m_encResult.result = EncodingResultInfo::EncodingResult::OK;
-        m_encResult.error.clear();
-        LOG_F(INFO, "doConvert: File opened to stream to server");
       }
       catch(std::exception &e)
       {
@@ -488,11 +519,12 @@ void MediaArchiverClient::doConvert()
       m_stdOut << buffer.data();
       m_encResult.error = m_stdOut.str();
       m_encResult.result = EncodingResultInfo::EncodingResult::UnknownError;
-      LOG_F(
-        ERROR, "doConvert: Encoding failed: %s", m_encResult.error.c_str());
+      LOG_F(ERROR, "doConvert: Encoding failed: %s",
+        m_encResult.error.c_str());
     }
 
-    m_mainState = MainStates::SendResult;
+    if(changeState)
+      m_mainState = MainStates::SendResult;
   }
   else
   {
@@ -535,6 +567,40 @@ void MediaArchiverClient::doSendResult()
     m_prevMainState = m_mainState;
     m_mainState = MainStates::WaitForReconnect;
   }
+}
+
+std::string MediaArchiverClient::getTranscodeCommand() const
+{
+  std::stringstream cmd;
+#ifdef WIN32
+  const std::string nul = "NUL";
+#else
+  const std::string nul = "/dev/null";
+#endif
+  std::stringstream outFile;
+  std::stringstream passFile;
+
+  if(m_passNo == 2)
+  {
+    outFile << " \"" << m_cfg.tempFolder << "/" << OutTmpFileName
+            << m_encSettings.finalExtension << "\"";
+  }
+  else
+  {
+    outFile << nul;
+  }
+
+  passFile << " \"" << m_cfg.tempFolder << "/" << pass1ResultFilePrefix
+           << "\"";
+
+  cmd << m_cfg.pathToEncoder << " -i \"" << m_cfg.tempFolder << "/"
+      << InTmpFileName << "." << m_encSettings.fileExtension << "\" "
+      << m_encSettings.commandLineParameters << " -pass "
+      << (m_passNo == 1 ? "1 -an -f null " : "2 ") << " -passlogfile "
+      << passFile.str() << " " << m_cfg.extraCommandLineOptions << " "
+      << (m_passNo == 1 ? m_cfg.extraOptionsPass1 : m_cfg.extraOptionsPass2)
+      << " " << outFile.str() << " 2>&1 ";
+  return cmd.str();
 }
 
 void MediaArchiverClient::doTransmit()
@@ -587,8 +653,7 @@ void MediaArchiverClient::removeTempFiles()
     INVALID_HANDLE_VALUE)
     return; /* No files found */
 
-  do
-  {
+  do {
     const std::string file_name = file_data.cFileName;
     const std::string full_file_name = m_cfg.tempFolder + "/" + file_name;
     const bool is_directory = (file_data.dwFileAttributes &
@@ -628,6 +693,9 @@ void MediaArchiverClient::removeTempFiles()
       m_cfg.tempFolder.c_str());
   }
 #endif
+  const std::string passLog = " \"" + m_cfg.tempFolder + "/" +
+    pass1ResultFilePrefix + pass1ResultFileSuffix + "\"";
+  std::remove(passLog.c_str());
 }
 
 void MediaArchiverClient::cleanUp()

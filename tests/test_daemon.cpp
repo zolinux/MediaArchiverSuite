@@ -58,7 +58,7 @@ std::unique_ptr<ServerIf> connect()
   REQUIRE(ver);
 
   if(gToken.empty())
-  generateToken();
+    generateToken();
   REQUIRE_NOTHROW(rpc->authenticate(gToken));
   return rpc;
 }
@@ -116,12 +116,12 @@ TEST_CASE("rpc service (pass)", "[rpc]")
   getNextFile(rpc, mes);
 
   const string fName("file.tmp");
-  ofstream writeFile(fName);
-  do
-  {
+  ofstream writeFile(fName, ios::binary);
+  do {
     REQUIRE_NOTHROW(success = rpc->readChunk(writeFile));
-    REQUIRE(writeFile.tellp() >= 0);
-    REQUIRE(mes.fileLength >= writeFile.tellp());
+    const auto pos = writeFile.tellp();
+    REQUIRE(pos >= 0);
+    REQUIRE(mes.fileLength >= pos);
   } while(success);
 
   REQUIRE(writeFile.tellp() == mes.fileLength);
@@ -130,7 +130,7 @@ TEST_CASE("rpc service (pass)", "[rpc]")
   // simulate encoded file by writing the first ~1MB
   size_t fSize = 1u * 1024 * 1024 + 42;
   EncodingResultInfo eri(EncodingResultInfo::EncodingResult::OK, fSize, "");
-  ifstream readFile(fName);
+  ifstream readFile(fName, ios::binary);
 
   REQUIRE_NOTHROW(rpc->postFile(eri));
   while(fSize)

@@ -75,7 +75,7 @@ void FileCopierLinux::moveFile(
   const char *src, const char *dst, const timespec *const mtime)
 {
   std::stringstream ss;
-  ss << "/usr/bin/mv \"" << src << "\" \"" << dst << "\"";
+  ss << "mv \"" << src << "\" \"" << dst << "\"";
 
   int i = system(ss.str().c_str());
   if(i)

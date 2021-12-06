@@ -18,6 +18,9 @@
 
 namespace MediaArchiver
 {
+/** Connect to server **/
+IServer *createServer(const MediaArchiver::ClientConfig &config);
+
 class MediaArchiverClient
 {
 protected:
@@ -38,6 +41,7 @@ protected:
   EncodingResultInfo m_encResult;
   int m_timeToWait;
   bool m_authenticated;
+  int m_passNo;
 
   enum class MainStates
   {
@@ -62,6 +66,8 @@ protected:
   void doReceive();
   void doConvert();
   void doSendResult();
+
+  std::string getTranscodeCommand() const;
 
   void launch(const std::string &cmdLine);
   int waitForFinish(std::string &stdOut);

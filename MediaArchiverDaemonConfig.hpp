@@ -11,6 +11,7 @@ struct DaemonConfig
   int verbosity;
   int serverPort;
   int aBitRate;
+  int vBitRate;
   int crf;
   int chunkSize;
   int serverInstances;

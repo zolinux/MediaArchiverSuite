@@ -12,7 +12,7 @@ set(CMAKE_EXECUTABLE_SUFFIX "")
 
 set(
   CMAKE_EXE_LINKER_FLAGS_INIT
-  " --sysroot=${ROOTFS_DIR} -Wl,--gc-sections,--print-memory-usage -Wl,-rpath=/lib -Wl,--dynamic-linker=/lib/ld-musl-mipsel.so.1"
+  " --sysroot=${ROOTFS_DIR} -Wl,--gc-sections,--print-memory-usage -Wl,-rpath=/lib:. -Wl,--dynamic-linker=/lib/ld-musl-mipsel.so.1"
 )
 set(
   CMAKE_EXE_LINKER_FLAGS
@@ -45,7 +45,7 @@ macro(__platform_generic_gnu lang)
 endmacro()
 
 set(CMAKE_SKIP_RPATH TRUE)
-SET(CMAKE_FIND_ROOT_PATH /home/zoli/work/openwrt-sdk-19.07.4-ramips-mt7621_gcc-7.5.0_musl.Linux-x86_64/staging_dir/target-mipsel_24kc_musl/usr;/home/zoli/work/openwrt-sdk-19.07.4-ramips-mt7621_gcc-7.5.0_musl.Linux-x86_64/staging_dir/toolchain-mipsel_24kc_gcc-7.5.0_musl)
+SET(CMAKE_FIND_ROOT_PATH ${ROOTFS_DIR};/home/zoli/work/openwrt-sdk/staging_dir/toolchain-mipsel_24kc_gcc-8.4.0_musl)
 
 SET(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM BOTH)
 SET(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
