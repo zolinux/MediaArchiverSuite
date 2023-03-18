@@ -5,7 +5,7 @@ LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 project(MediaArchiverClient VERSION 0.0.1 LANGUAGES C CXX) 
 
 find_package(Threads REQUIRED)
-find_package(SQLite3 QUIET)
+find_package(SQLite3 REQUIRED)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 
@@ -118,7 +118,8 @@ target_include_directories(sqlite  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOUR
 target_link_libraries(MediaArchiverDaemon 
     PRIVATE MediaArchiverCommon Threads::Threads pthread sqlite filesystemwatcher Loguru sqlite3
 )
-# target_include_directories(MediaArchiverDaemon INTERFACE
-#     $<BUILD_INTERFACE:rpc>
-# )
+target_link_options(MediaArchiverDaemon PRIVATE -Wl,-rpath=/lib:.)
+target_include_directories(MediaArchiverDaemon INTERFACE
+    $<BUILD_INTERFACE:rpc>
+)
 
