@@ -542,7 +542,7 @@ void MediaArchiverDaemon::authenticate(const std::string &token)
     }
   }
 
-  cl.lastActivify = std::chrono::steady_clock::now();
+  cl.lastActivity = std::chrono::steady_clock::now();
   cl.token = token;
   m_connections[id] = std::move(cl);
 }
@@ -643,9 +643,20 @@ bool MediaArchiverDaemon::getNextFile(ConnectedClient &cli,
       cli.originalFileName = fi.fileName;
       stringstream ss;
       ss << "-y -hide_banner -nostats -loglevel warning -copyts -map_metadata 0 -movflags use_metadata_tags -c:v "
-         << m_cfg.vCodec << " -b:v " << to_string(m_cfg.vBitRate)
-         << " -crf " << m_cfg.crf << " -c:a " << m_cfg.aCodec << " -b:a "
-         << to_string(m_cfg.aBitRate);
+         << m_cfg.vCodec;
+      if(m_cfg.vBitRate)
+      {
+        ss << " -b:v " << to_string(m_cfg.vBitRate);
+      }
+      if(m_cfg.crf)
+      {
+        ss << " -crf " << m_cfg.crf;
+      }
+      if(m_cfg.aBitRate)
+      {
+        ss << " -b:a " << to_string(m_cfg.aBitRate);
+      }
+      ss << " -c:a " << m_cfg.aCodec;
       cli.encSettings.commandLineParameters = ss.str();
     }
   }
@@ -672,7 +683,7 @@ bool MediaArchiverDaemon::getNextFile(ConnectedClient &cli,
 }
 
 /**
- * @brief read a chunf rom the file. if error, it returns false on error,
+ * @brief read a chunk rom the file. if error, it returns false on error,
  * otherwise true. EOF is reached if the data size != chunk size
  *
  * @param chunk

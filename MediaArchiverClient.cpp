@@ -300,10 +300,9 @@ void MediaArchiverClient::doReceive()
       }
       m_srcFile.close();
       disconnect();
-      m_encResult = EncodingResultInfo{
-        .result = EncodingResultInfo::EncodingResult::UnknownError,
-        .fileLength = 0,
-        .error = m_stdOut.str()};
+      m_encResult =
+        EncodingResultInfo(EncodingResultInfo::EncodingResult::UnknownError,
+          0, m_stdOut.str());
 
       m_passNo = 1; // start with pass number 1
       launch(getTranscodeCommand());

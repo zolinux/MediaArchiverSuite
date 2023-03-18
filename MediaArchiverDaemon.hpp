@@ -31,7 +31,7 @@ struct ConnectedClient
   uint32_t originalFileId;
   std::string originalFileName;
   std::string tempFileName;
-  std::chrono::steady_clock::time_point lastActivify;
+  std::chrono::steady_clock::time_point lastActivity;
   std::string token;
   std::ifstream inFile;
   std::ofstream outFile;
