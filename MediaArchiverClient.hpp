@@ -76,6 +76,7 @@ protected:
   void cleanUp();
   void checkCreateRpc();
   void disconnect();
+  bool pass2Enabled() const;
 
 public:
   MediaArchiverClient(const ClientConfig &cfg);

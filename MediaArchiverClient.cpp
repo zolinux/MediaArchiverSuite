@@ -148,6 +148,13 @@ void MediaArchiverClient::disconnect()
   m_authenticated = false;
 }
 
+bool MediaArchiverClient::pass2Enabled() const
+{
+  const auto hasCrf = m_encSettings.commandLineParameters.find("-crf") !=
+    std::string::npos;
+  return !hasCrf;
+}
+
 void MediaArchiverClient::doAuth()
 {
   if(m_stopRequested)
@@ -304,7 +311,8 @@ void MediaArchiverClient::doReceive()
         EncodingResultInfo(EncodingResultInfo::EncodingResult::UnknownError,
           0, m_stdOut.str());
 
-      m_passNo = 1; // start with pass number 1
+      // start with pass number 2 if "-crf" parameter given
+      m_passNo = pass2Enabled() ? 1 : 2;
       launch(getTranscodeCommand());
       m_mainState = MainStates::WaitForEncodingFinished;
     }
@@ -577,7 +585,6 @@ std::string MediaArchiverClient::getTranscodeCommand() const
   const std::string nul = "/dev/null";
 #endif
   std::stringstream outFile;
-  std::stringstream passFile;
 
   if(m_passNo == 2)
   {
@@ -589,16 +596,28 @@ std::string MediaArchiverClient::getTranscodeCommand() const
     outFile << nul;
   }
 
-  passFile << " \"" << m_cfg.tempFolder << "/" << pass1ResultFilePrefix
-           << "\"";
-
   cmd << m_cfg.pathToEncoder << " -i \"" << m_cfg.tempFolder << "/"
       << InTmpFileName << "." << m_encSettings.fileExtension << "\" "
-      << m_encSettings.commandLineParameters << " -pass "
-      << (m_passNo == 1 ? "1 -an -f null " : "2 ") << " -passlogfile "
-      << passFile.str() << " " << m_cfg.extraCommandLineOptions << " "
-      << (m_passNo == 1 ? m_cfg.extraOptionsPass1 : m_cfg.extraOptionsPass2)
-      << " " << outFile.str() << " 2>&1 ";
+      << m_encSettings.commandLineParameters;
+
+  if(pass2Enabled())
+  {
+    std::stringstream passFile;
+    passFile << " \"" << m_cfg.tempFolder << "/" << pass1ResultFilePrefix
+             << "\"";
+
+    cmd << " -pass " << (m_passNo == 1 ? "1 -an -f null " : "2 ")
+        << " -passlogfile " << passFile.str() << " "
+        << m_cfg.extraCommandLineOptions << " "
+        << (m_passNo == 1 ? m_cfg.extraOptionsPass1 :
+                            m_cfg.extraOptionsPass2);
+  }
+  else
+  {
+    cmd << " " << m_cfg.extraCommandLineOptions;
+  }
+
+  cmd << " " << outFile.str() << " 2>&1 ";
   return cmd.str();
 }
 
