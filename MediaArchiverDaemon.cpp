@@ -644,15 +644,15 @@ bool MediaArchiverDaemon::getNextFile(ConnectedClient &cli,
       stringstream ss;
       ss << "-y -hide_banner -nostats -loglevel warning -copyts -map_metadata 0 -movflags use_metadata_tags -c:v "
          << m_cfg.vCodec;
-      if(m_cfg.vBitRate)
+      if(m_cfg.vBitRate >= 0)
       {
         ss << " -b:v " << to_string(m_cfg.vBitRate);
       }
-      if(m_cfg.crf)
+      if(m_cfg.crf >= 0)
       {
         ss << " -crf " << m_cfg.crf;
       }
-      if(m_cfg.aBitRate)
+      if(m_cfg.aBitRate >= 0)
       {
         ss << " -b:a " << to_string(m_cfg.aBitRate);
       }
